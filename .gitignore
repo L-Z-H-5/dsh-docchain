@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# macOS
+.DS_Store
+
+# Local docchain credentials/config (never commit real keys)
+skills/docchain_config.json
+**/scripts/config.json

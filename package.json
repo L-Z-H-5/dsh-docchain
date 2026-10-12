@@ -1,0 +1,32 @@
+{
+  "name": "dsh-docchain",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH plugin for docchain: document filename/content/metadata search plus a deep-research workflow",
+  "icon": "assets/icon.png",
+  "license": "UNLICENSED",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    }
+  }
+}

@@ -1,0 +1,5 @@
+# dsh-docchain bundle patch: inserts the bundled skill provider plugin.
+- insert:
+    - id: dsh-docchain
+      name: "dsh-docchain"
+      config: {}
