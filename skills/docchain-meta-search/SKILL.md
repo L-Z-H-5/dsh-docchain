@@ -30,7 +30,7 @@ description: 根据自定义元数据字段查询文档。通过元数据字段�
 当不清楚主题有哪些字段时调用：
 
 ```bash
-python scripts/query_meta_field.py --topic_ids <id1,id2,id3> --list_fields
+node scripts/query_meta_field.js --topic_ids <id1,id2,id3> --list_fields
 ```
 
 ### 模式二：条件查询
@@ -38,7 +38,7 @@ python scripts/query_meta_field.py --topic_ids <id1,id2,id3> --list_fields
 当有明确字段名与查询条件时调用：
 
 ```bash
-python scripts/query_meta_field.py --topic_ids <id> --conditions "<field,op,value>"
+node scripts/query_meta_field.js --topic_ids <id> --conditions "<field,op,value>"
 ```
 
 ## 参数说明

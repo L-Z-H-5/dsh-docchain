@@ -2,13 +2,15 @@
 
 English | [中文](./README.zh-CN.md)
 
-A DSH plugin that bundles docchain document search (filename, content, and metadata), document-to-Markdown conversion, plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
+A DSH plugin that bundles docchain document search (filename, content, and metadata), topic listing, bulk document upload, document-to-Markdown conversion, plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
 
 | Skill | Kind | Description |
 |---|---|---|
-| `docchain-filename-search` | SKILL.md + Python script | Find documents whose filename matches keywords, across topics |
-| `docchain-content-search` | SKILL.md + Python script | Search document content by keyword; returns line numbers and content; `or`/`and` operators |
-| `docchain-meta-search` | SKILL.md + Python script | Query documents by custom metadata fields (string/number/time, exact and range) |
+| `docchain-filename-search` | SKILL.md + Node.js script | Find documents whose filename matches keywords, across topics |
+| `docchain-content-search` | SKILL.md + Node.js script | Search document content by keyword; returns line numbers and content; `or`/`and` operators |
+| `docchain-meta-search` | SKILL.md + Node.js script | Query documents by custom metadata fields (string/number/time, exact and range) |
+| `docchain-topic-info` | SKILL.md + Node.js script | List docchain topics with pagination |
+| `docchain-upload` | SKILL.md + Node.js script | Upload a local file or a whole folder to a given docchain topic in bulk |
 | `doc2markdown` | SKILL.md + Node.js script | Convert docx/doc/pdf/pptx/xlsx/images and many more formats to Markdown via the docchain parsing service; results land next to the source file |
 | `deep-research-advanced` | SKILL.md only | Orchestrator-style multi-subagent deep research workflow (pure instructions, no scripts) |
 
@@ -28,7 +30,7 @@ plugin_manager install_bundle target=<absolute path to this directory>
 
 ## Configuration (required)
 
-No credentials ship in this package. Every search script (Python) needs a docchain service endpoint and an API key before it can run; `doc2markdown` (Node.js) works with neither — it defaults to the public parsing service and uploads anonymously, while the same config chain can point it at a custom endpoint/key.
+No credentials ship in this package. Every script except `doc2markdown` (Node.js) needs a docchain service endpoint and an API key before it can run; `doc2markdown` (Node.js) works with neither — it defaults to the public parsing service and uploads anonymously, while the same config chain can point it at a custom endpoint/key.
 
 | Field | Meaning | Required |
 |---|---|---|
@@ -51,7 +53,7 @@ Config file format (all JSON-based):
 }
 ```
 
-Scripts require Python 3 with the `requests` package (the search skills) or only Node.js (`doc2markdown`). Invoke them from the skill's base directory as `python3 scripts/<script>.py …` / `node scripts/doc2markdown.js …` (see each SKILL.md for parameters).
+All scripts need only Node.js. Invoke them from the skill's base directory as `node scripts/<script>.js …` (see each SKILL.md for parameters).
 
 ## Plugin configuration (recommended)
 
@@ -117,6 +119,28 @@ Filter documents by custom metadata field conditions — string, number, and tim
 
 - "Find documents in topic 112 whose metadata author is Zhang San"
 - "Find contracts in topic 113 whose amount field is greater than 1000"
+
+### docchain-topic-info — list topics
+
+Lists the topics in a docchain system with pagination. Often a first step before other skills: get the topic IDs, then search or upload within a topic.
+
+**How to use it** — just ask what topics exist; optionally give a page number and page size.
+
+**Examples:**
+
+- "What topics are there?"
+- "Show page 2 of the topic list, 10 per page"
+
+### docchain-upload — bulk document upload
+
+Uploads a single local file or a whole folder to a given docchain topic, one file at a time, with progress and success/failure counts. Folder scans cover top-level files only (non-recursive).
+
+**How to use it** — provide the file/folder path and the target topic ID (`--topic_id` is required).
+
+**Examples:**
+
+- "Upload ./report.pdf to topic 123"
+- "Bulk-upload the documents in ./docs to topic 456"
 
 ### doc2markdown — convert documents to Markdown
 

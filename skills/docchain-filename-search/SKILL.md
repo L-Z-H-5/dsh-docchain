@@ -29,7 +29,7 @@ description: 根据关键字搜索文档文件名。快速查找文件名包含�
 1. 从自然语言请求中提取 keywords 和 topic_ids
 2. 运行搜索脚本：
    ```bash
-   python scripts/search_filename.py --keywords <关键词1,关键词2> --topic_ids <id1,id2> 
+   node scripts/search_filename.js --keywords <关键词1,关键词2> --topic_ids <id1,id2> 
    ```
 3. 向用户显示格式化的结果
 

@@ -2,13 +2,15 @@
 
 [English](./README.md) | 中文
 
-一个 DSH 插件，内置 docchain 文档检索（文件名/内容/元数据）、文档转 Markdown 解析与多子智能体深度研究工作流：任意机器上用 `plugin_manager install_bundle` 安装即可生效，无需手动拷贝到 `~/.agents/skills`。
+一个 DSH 插件，内置 docchain 文档检索（文件名/内容/元数据）、主题查询、文档批量上传、文档转 Markdown 解析与多子智能体深度研究工作流：任意机器上用 `plugin_manager install_bundle` 安装即可生效，无需手动拷贝到 `~/.agents/skills`。
 
 | 技能 | 形态 | 说明 |
 |---|---|---|
-| `docchain-filename-search` | SKILL.md + Python 脚本 | 按文件名关键词跨主题查找文档 |
-| `docchain-content-search` | SKILL.md + Python 脚本 | 在文档内容中搜索关键词，返回行号和内容，支持"或/且" |
-| `docchain-meta-search` | SKILL.md + Python 脚本 | 按自定义元数据字段查询文档（字符串/数值/时间，精确与范围） |
+| `docchain-filename-search` | SKILL.md + Node.js 脚本 | 按文件名关键词跨主题查找文档 |
+| `docchain-content-search` | SKILL.md + Node.js 脚本 | 在文档内容中搜索关键词，返回行号和内容，支持"或/且" |
+| `docchain-meta-search` | SKILL.md + Node.js 脚本 | 按自定义元数据字段查询文档（字符串/数值/时间，精确与范围） |
+| `docchain-topic-info` | SKILL.md + Node.js 脚本 | 查询 docchain 主题列表，支持分页 |
+| `docchain-upload` | SKILL.md + Node.js 脚本 | 把本地文件或整个文件夹批量上传到指定 docchain 主题 |
 | `doc2markdown` | SKILL.md + Node.js 脚本 | 把 docx/doc/pdf/pptx/xlsx/图片等常见格式解析为 Markdown，结果保存在源文件同目录 |
 | `deep-research-advanced` | 仅 SKILL.md | 主控式多子智能体深度研究工作流（纯指令，无脚本） |
 
@@ -28,7 +30,7 @@ plugin_manager install_bundle target=<本目录绝对路径>
 
 ## 配置说明（必读）
 
-包内不携带任何凭据。每个检索脚本（Python）运行前都需要 docchain 服务地址与 API Key；`doc2markdown`（Node.js）两者都不需要——默认使用公有解析服务并匿名上传，同样可用上述配置链指向自建地址/Key。
+包内不携带任何凭据。除 `doc2markdown` 外的每个脚本（Node.js）运行前都需要 docchain 服务地址与 API Key；`doc2markdown`（Node.js）两者都不需要——默认使用公有解析服务并匿名上传，同样可用上述配置链指向自建地址/Key。
 
 | 配置项 | 说明 | 必填 |
 |---|---|---|
@@ -51,7 +53,7 @@ plugin_manager install_bundle target=<本目录绝对路径>
 }
 ```
 
-脚本依赖 Python 3 与 `requests` 包（检索类技能）或仅需 Node.js（`doc2markdown`），在技能根目录下以 `python3 scripts/<脚本>.py …` / `node scripts/doc2markdown.js …` 方式运行（参数见各 SKILL.md）。
+所有脚本均仅需 Node.js，在技能根目录下以 `node scripts/<脚本>.js …` 方式运行（参数见各 SKILL.md）。
 
 ## 插件配置（推荐）
 
@@ -117,6 +119,28 @@ Bundle 插入一个 Host 插件（`dsh-docchain`），激活时在 `ctx.skills` 
 
 - "在主题112中查找元数据中作者是张三的文档"
 - "在主题113中查找金额字段大于1000的合同"
+
+### docchain-topic-info（主题查询）
+
+查询 docchain 系统中的主题列表，支持分页浏览。常作为其他技能的前置步骤：先拿到主题 ID，再按主题检索或上传。
+
+**交互方式**：直接询问有哪些主题，可带页码与每页数量。
+
+**示例**：
+
+- "有哪些主题"
+- "看下主题列表第 2 页，每页 10 条"
+
+### docchain-upload（文档上传）
+
+把本地单个文件或整个文件夹批量上传到指定 docchain 主题，逐个上传并显示进度与成功/失败统计。文件夹仅扫描顶层文件（不递归）。
+
+**交互方式**：给出文件/文件夹路径与目标主题 ID（`--topic_id` 必填）。
+
+**示例**：
+
+- "把 ./report.pdf 上传到主题 123"
+- "把 ./docs 文件夹里的文档批量上传到主题 456"
 
 ### doc2markdown（文档转 Markdown）
 

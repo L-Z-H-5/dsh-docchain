@@ -24,7 +24,7 @@
 //   Config field. At activation — and again when `credentials/
 //   reference-updated` or a `settings/document-updated` for this row fires —
 //   resolved values are mirrored into `~/.dsh/storages/docchain-config.json`,
-//   which the Python scripts read on every run (they also accept env vars and
+//   which the search scripts read on every run (they also accept env vars and
 //   per-skill config.json). The file is a pure projection of what the row
 //   config currently resolves to: a value cleared in the UI disappears from
 //   it instead of lingering, so the scripts fall through to their defaults.
@@ -40,7 +40,7 @@ const SKILL_RANK = 450;
 
 const skillsRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "skills");
 
-/** State file the Python scripts read; resolved Config values materialize into it. */
+/** State file the search scripts read; resolved Config values materialize into it. */
 export const CONFIG_FILE = path.join(os.homedir(), ".dsh", "storages", "docchain-config.json");
 
 /** Default credential-reference name for the docchain API key. */

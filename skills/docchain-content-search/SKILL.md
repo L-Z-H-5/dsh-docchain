@@ -37,9 +37,9 @@ description: 在 docchain 文档内容中搜索关键字，返回匹配行的行
 1. 从自然语言请求中提取参数
 2. 运行搜索脚本：
    ```bash
-   python scripts/search_in_doc.py --doc_ids <id1,id2> --keywords <关键词1,关键词2> --operator <or|and> --limit <n>
+   node scripts/search_in_doc.js --doc_ids <id1,id2> --keywords <关键词1,关键词2> --operator <or|and> --limit <n>
    # 或按主题搜索
-   python scripts/search_in_doc.py --topic_ids <tid1,tid2> --keywords <关键词1,关键词2> --operator <or|and> --limit <n>
+   node scripts/search_in_doc.js --topic_ids <tid1,tid2> --keywords <关键词1,关键词2> --operator <or|and> --limit <n>
    ```
 3. 向用户显示格式化的结果
 
