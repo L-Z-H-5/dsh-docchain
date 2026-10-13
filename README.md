@@ -2,13 +2,14 @@
 
 English | [中文](./README.zh-CN.md)
 
-A DSH plugin that bundles docchain document search (filename, content, and metadata) plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
+A DSH plugin that bundles docchain document search (filename, content, and metadata), document-to-Markdown conversion, plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
 
 | Skill | Kind | Description |
 |---|---|---|
 | `docchain-filename-search` | SKILL.md + Python script | Find documents whose filename matches keywords, across topics |
 | `docchain-content-search` | SKILL.md + Python script | Search document content by keyword; returns line numbers and content; `or`/`and` operators |
 | `docchain-meta-search` | SKILL.md + Python script | Query documents by custom metadata fields (string/number/time, exact and range) |
+| `doc2markdown` | SKILL.md + Node.js script | Convert docx/doc/pdf/pptx/xlsx/images and many more formats to Markdown via the docchain parsing service; results land next to the source file |
 | `deep-research-advanced` | SKILL.md only | Orchestrator-style multi-subagent deep research workflow (pure instructions, no scripts) |
 
 ## Installation
@@ -27,7 +28,7 @@ plugin_manager install_bundle target=<absolute path to this directory>
 
 ## Configuration (required)
 
-No credentials ship in this package. Every Python script needs a docchain service endpoint and an API key before it can run.
+No credentials ship in this package. Every search script (Python) needs a docchain service endpoint and an API key before it can run; `doc2markdown` (Node.js) works with neither — it defaults to the public parsing service and uploads anonymously, while the same config chain can point it at a custom endpoint/key.
 
 | Field | Meaning | Required |
 |---|---|---|
@@ -50,7 +51,7 @@ Config file format (all JSON-based):
 }
 ```
 
-Scripts require Python 3 with the `requests` package. Invoke them from the skill's base directory as `python3 scripts/<script>.py …` (see each SKILL.md for parameters).
+Scripts require Python 3 with the `requests` package (the search skills) or only Node.js (`doc2markdown`). Invoke them from the skill's base directory as `python3 scripts/<script>.py …` / `node scripts/doc2markdown.js …` (see each SKILL.md for parameters).
 
 ## Plugin configuration (recommended)
 
@@ -64,15 +65,15 @@ The plugin follows the official credential pattern. Its Config schema declares:
 | `docchain_api_key_ref` | Credential reference name for the key; default `DOCCHAIN_API_KEY` |
 | `docchain_api_key` | Fallback literal key (not recommended; the store wins over it) |
 
-The key's value lives in the **credential store** `~/.dsh/.credentials.yaml` (`refs:` section, owner-only permissions) — save it through the configuration page or edit the file directly; changes hot-reload. It can also come from the launch environment under the same variable name. On activation, and again whenever a stored credential changes, the resolved values are materialized into `~/.dsh/storages/docchain-config.json` (permissions `0600`), which the scripts read on every run.
+The key's value lives in the **credential store** `~/.dsh/.credentials.yaml` (`refs:` section, owner-only permissions) — save it through the configuration page or edit the file directly; changes hot-reload. It can also come from the launch environment under the same variable name. On activation, whenever a stored credential changes, and whenever this row's settings are saved, the resolved values are mirrored into `~/.dsh/storages/docchain-config.json` (permissions `0600`): the file is a pure projection of the current resolution, so a cleared config entry disappears from it; the scripts read it on every run.
 
-Key resolution order: credential store (launch env > stored file) > `docchain_api_key` row literal > whatever the state file already holds.
+Key resolution order: credential store (launch env > stored file) > `docchain_api_key` row literal.
 
 To change values, either:
 
 - use the **configuration page** on the Plugins page — edit the service URL and save/update the API key, or
 - save/update `DOCCHAIN_API_KEY` in the credential store — takes effect without touching this plugin, or
-- edit `~/.dsh/storages/docchain-config.json` directly (takes effect on the next script run), or
+- edit `~/.dsh/storages/docchain-config.json` directly (takes effect on the next script run; the plugin rewrites it from the resolved config on activation and config changes — for durable overrides use env vars or a per-skill config.json), or
 - set `docchain_url` / `docchain_api_key_ref` / `docchain_api_key` in the plugin's config row (patch `config` / preset override) and re-activate the plugin.
 
 ## How it works
@@ -116,6 +117,19 @@ Filter documents by custom metadata field conditions — string, number, and tim
 
 - "Find documents in topic 112 whose metadata author is Zhang San"
 - "Find contracts in topic 113 whose amount field is greater than 1000"
+
+### doc2markdown — convert documents to Markdown
+
+Uploads a document (docx, doc, pdf, ppt, xlsx, images, epub, mobi and many more) to the docchain parsing service and downloads the converted Markdown next to the source file — either a single `.md` file (`--md`) or a package with images and tables.
+
+**How to use it** — point it at a file path, e.g. "read the content of ./report.pdf" or "convert 合同.docx to Markdown".
+
+**Examples:**
+
+- "Summarize the content of /path/to/report.pdf"
+- "Convert 合同.docx to a single Markdown file"
+
+The service URL and API key follow the same config chain as the search scripts, but both are optional: without configuration the public service (`https://lab.hjcloud.com/llmdoc`) is used with anonymous upload.
 
 ### deep-research-advanced — multi-subagent deep research
 

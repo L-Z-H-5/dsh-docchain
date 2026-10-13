@@ -2,13 +2,14 @@
 
 [English](./README.md) | 中文
 
-一个 DSH 插件，内置 docchain 文档检索（文件名/内容/元数据）与多子智能体深度研究工作流：任意机器上用 `plugin_manager install_bundle` 安装即可生效，无需手动拷贝到 `~/.agents/skills`。
+一个 DSH 插件，内置 docchain 文档检索（文件名/内容/元数据）、文档转 Markdown 解析与多子智能体深度研究工作流：任意机器上用 `plugin_manager install_bundle` 安装即可生效，无需手动拷贝到 `~/.agents/skills`。
 
 | 技能 | 形态 | 说明 |
 |---|---|---|
 | `docchain-filename-search` | SKILL.md + Python 脚本 | 按文件名关键词跨主题查找文档 |
 | `docchain-content-search` | SKILL.md + Python 脚本 | 在文档内容中搜索关键词，返回行号和内容，支持"或/且" |
 | `docchain-meta-search` | SKILL.md + Python 脚本 | 按自定义元数据字段查询文档（字符串/数值/时间，精确与范围） |
+| `doc2markdown` | SKILL.md + Node.js 脚本 | 把 docx/doc/pdf/pptx/xlsx/图片等常见格式解析为 Markdown，结果保存在源文件同目录 |
 | `deep-research-advanced` | 仅 SKILL.md | 主控式多子智能体深度研究工作流（纯指令，无脚本） |
 
 ## 安装
@@ -27,7 +28,7 @@ plugin_manager install_bundle target=<本目录绝对路径>
 
 ## 配置说明（必读）
 
-包内不携带任何凭据。每个 Python 脚本运行前都需要 docchain 服务地址与 API Key。
+包内不携带任何凭据。每个检索脚本（Python）运行前都需要 docchain 服务地址与 API Key；`doc2markdown`（Node.js）两者都不需要——默认使用公有解析服务并匿名上传，同样可用上述配置链指向自建地址/Key。
 
 | 配置项 | 说明 | 必填 |
 |---|---|---|
@@ -50,7 +51,7 @@ plugin_manager install_bundle target=<本目录绝对路径>
 }
 ```
 
-脚本依赖 Python 3 与 `requests` 包，在技能根目录下以 `python3 scripts/<脚本>.py …` 方式运行（参数见各 SKILL.md）。
+脚本依赖 Python 3 与 `requests` 包（检索类技能）或仅需 Node.js（`doc2markdown`），在技能根目录下以 `python3 scripts/<脚本>.py …` / `node scripts/doc2markdown.js …` 方式运行（参数见各 SKILL.md）。
 
 ## 插件配置（推荐）
 
@@ -64,15 +65,15 @@ plugin_manager install_bundle target=<本目录绝对路径>
 | `docchain_api_key_ref` | API Key 的凭据引用名，默认 `DOCCHAIN_API_KEY` |
 | `docchain_api_key` | 备用：直接写死 Key（不推荐；凭据存储优先） |
 
-Key 的实际值保存在**凭据存储** `~/.dsh/.credentials.yaml`（`refs:` 段，仅本用户可读）——可通过配置页写入或直接编辑文件，改动热生效；也可以用同名启动环境变量提供。激活时、以及任一存储凭据变化时，解析出的值会被落盘到 `~/.dsh/storages/docchain-config.json`（权限 `0600`），脚本每次运行读取该文件。
+Key 的实际值保存在**凭据存储** `~/.dsh/.credentials.yaml`（`refs:` 段，仅本用户可读）——可通过配置页写入或直接编辑文件，改动热生效；也可以用同名启动环境变量提供。激活时、存储凭据变化时、以及本行设置保存时，解析出的值会被镜像写入 `~/.dsh/storages/docchain-config.json`（权限 `0600`）：该文件是当前解析结果的纯投影，配置清空后对应条目随之消失；脚本每次运行读取该文件。
 
-Key 解析顺序：凭据存储（启动环境 > 存储文件）> `docchain_api_key` 行内字面值 > 状态文件已有值。
+Key 解析顺序：凭据存储（启动环境 > 存储文件）> `docchain_api_key` 行内字面值。
 
 修改配置的方式：
 
 - 使用插件页上的**配置页**——编辑服务地址、保存/更新 API Key；或
 - 在凭据存储中保存/更新 `DOCCHAIN_API_KEY`——无需触碰本插件即生效；或
-- 直接编辑 `~/.dsh/storages/docchain-config.json`（下一次脚本运行即生效）；或
+- 直接编辑 `~/.dsh/storages/docchain-config.json`（下一次脚本运行即生效；插件在激活或配置变化时会按解析结果重写该文件，需要长期覆盖请用环境变量或技能级 config.json）；或
 - 在插件 config 行（patch `config` / preset override）设置 `docchain_url` / `docchain_api_key_ref` / `docchain_api_key` 后重新激活插件。
 
 ## 工作机制
@@ -116,6 +117,19 @@ Bundle 插入一个 Host 插件（`dsh-docchain`），激活时在 `ctx.skills` 
 
 - "在主题112中查找元数据中作者是张三的文档"
 - "在主题113中查找金额字段大于1000的合同"
+
+### doc2markdown（文档转 Markdown）
+
+把文档（docx、doc、pdf、ppt、xlsx、图片、epub、mobi 等常见格式）上传到 docchain 解析服务，转换结果下载到源文件同目录——可以是单个 `.md` 文件（`--md`）或含图片、表格的完整 MD 包。
+
+**交互方式**：给出文件路径，如"读一下 ./report.pdf 的内容"或"把 合同.docx 转成 Markdown"。
+
+**示例**：
+
+- "总结 /path/to/report.pdf 的内容"
+- "把 合同.docx 转成单个 Markdown 文件"
+
+服务地址与 API Key 沿用检索脚本同一配置链，但均为可选：不配置时使用公有服务（`https://lab.hjcloud.com/llmdoc`）匿名上传。
 
 ### deep-research-advanced（高级深度研究）
 

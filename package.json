@@ -1,9 +1,9 @@
 {
   "name": "dsh-docchain",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "DSH plugin for docchain: document filename/content/metadata search plus a deep-research workflow",
+  "description": "DSH plugin for docchain: document filename/content/metadata search, document-to-Markdown conversion, plus a deep-research workflow",
   "icon": "assets/icon.png",
   "license": "UNLICENSED",
   "exports": {

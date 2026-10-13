@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Docchain",
-    "description": "docchain 文档检索插件：文件名/内容/元数据搜索，以及深度研究工作流。"
+    "description": "docchain 文档插件：文件名/内容/元数据搜索、文档转 Markdown 解析，以及深度研究工作流。"
   }
 }

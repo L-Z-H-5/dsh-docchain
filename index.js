@@ -21,10 +21,13 @@
 //   reference (default `DOCCHAIN_API_KEY`) whose value lives in the
 //   credential store (`~/.dsh/.credentials.yaml`, editable from the
 //   configuration UI) or the launch environment; the endpoint is a plain row
-//   Config field. At activation — and again whenever `credentials/
-//   reference-updated` fires — resolved values are materialized into
-//   `~/.dsh/storages/docchain-config.json`, which the Python scripts
-//   read on every run (they also accept env vars and per-skill config.json).
+//   Config field. At activation — and again when `credentials/
+//   reference-updated` or a `settings/document-updated` for this row fires —
+//   resolved values are mirrored into `~/.dsh/storages/docchain-config.json`,
+//   which the Python scripts read on every run (they also accept env vars and
+//   per-skill config.json). The file is a pure projection of what the row
+//   config currently resolves to: a value cleared in the UI disappears from
+//   it instead of lingering, so the scripts fall through to their defaults.
 import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -66,15 +69,19 @@ export const Config = z.object({
   docchain_api_key: z.string().description("备用：直接写死 Key（不推荐，凭据存储优先）"),
 });
 
+/** The credential-reference name the row config resolves its API key from. */
+function keyRefName(config) {
+  return typeof config?.docchain_api_key_ref === "string" && config.docchain_api_key_ref.trim()
+    ? config.docchain_api_key_ref.trim()
+    : DEFAULT_KEY_REF;
+}
+
 /**
  * Resolve the API key for the row config: the credential store wins (managed,
  * hot-reloadable), the row literal is the fallback. Returns `{ key, from }`.
  */
 async function resolveApiKey(ctx, config) {
-  const refName =
-    typeof config?.docchain_api_key_ref === "string" && config.docchain_api_key_ref.trim()
-      ? config.docchain_api_key_ref.trim()
-      : DEFAULT_KEY_REF;
+  const refName = keyRefName(config);
   try {
     const credentials = ctx.get?.("credentials");
     if (credentials?.resolve) {
@@ -89,8 +96,16 @@ async function resolveApiKey(ctx, config) {
 }
 
 /**
- * Merge resolved Config values into the state file; writes only on content
- * change so an unchanged re-materialization stays silent.
+ * Mirror the resolved Config values into the state file. The file is a pure
+ * projection of what the row config resolves to right now — rebuilt from
+ * scratch on every materialization, never merged over its previous content —
+ * so a value cleared in the UI disappears from it instead of lingering, and
+ * the scripts fall through to lower-priority config or their default. Writes
+ * only on content change so an unchanged re-materialization stays silent.
+ * Manual overrides belong in the layers the scripts read before this file
+ * (env vars, per-skill config.json), which this mirror never touches.
+ * @param ctx - the plugin context.
+ * @param config - the resolved row config.
  */
 async function materializeServiceConfig(ctx, config) {
   // `docchain_url` is volatile: its resolved value is a reference wrapper
@@ -100,14 +115,7 @@ async function materializeServiceConfig(ctx, config) {
   const urlValue = typeof rawUrl === "string" ? rawUrl : typeof rawUrl?.get === "function" ? rawUrl.get() : undefined;
   const url = typeof urlValue === "string" ? urlValue.trim() : "";
   const { key, from } = await resolveApiKey(ctx, config);
-  if (!url && !key) return; // nothing resolved; keep any existing/manual state file as-is
-  let current = {};
-  try {
-    current = JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
-  } catch {
-    current = {}; // missing or invalid; start fresh
-  }
-  const next = { ...current };
+  const next = {};
   if (url) next.docchain_url = url;
   if (key) next.docchain_api_key = key;
   const rendered = `${JSON.stringify(next, null, 2)}\n`;
@@ -269,12 +277,21 @@ export function apply(ctx, config) {
   // removed in the credential store / its file), so the state file follows
   // without a restart. The event carries the changed ref; re-resolving on any
   // update is cheap and a no-op write when nothing changed.
-  const offCredentialUpdate = ctx.on("credentials/reference-updated", () => {
+  const offCredentialUpdate = ctx.on("credentials/reference-updated", (ref) => {
+    if (ref !== keyRefName(config)) return; // some other reference changed
+    materializeServiceConfig(ctx, config).catch(fail);
+  });
+  // Re-materialize when this row's settings document changes (the Plugins
+  // page saved an edit, including clearing the URL back to its default), so
+  // the state file follows the accepted value in both directions.
+  const offSettingsUpdate = ctx.on("settings/document-updated", (ns) => {
+    if (ns !== PROVIDER_NAME) return; // some other entry's settings changed
     materializeServiceConfig(ctx, config).catch(fail);
   });
   return () => {
     try {
       offCredentialUpdate?.();
+      offSettingsUpdate?.();
     } catch {
       // already disposed
     }
