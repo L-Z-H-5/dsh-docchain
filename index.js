@@ -78,21 +78,35 @@ function keyRefName(config) {
 
 /**
  * Resolve the API key for the row config: the credential store wins (managed,
- * hot-reloadable), the row literal is the fallback. Returns `{ key, from }`.
+ * hot-reloadable), the row literal is the fallback.
+ *
+ * Returns `{ key, from, resolved }`. `resolved` says whether an empty `key` is
+ * authoritative: `true` when the credential service answered (so an absent ref
+ * genuinely means "no key") or a row literal supplied the value; `false` when
+ * the credential service was unavailable or its `resolve` threw — i.e. this
+ * call raced the service's async init and cannot yet distinguish "no key" from
+ * "not loaded". Callers must NOT erase a previously materialized key on a
+ * `resolved: false` empty result.
  */
 async function resolveApiKey(ctx, config) {
   const refName = keyRefName(config);
+  const literal = typeof config?.docchain_api_key === "string" ? config.docchain_api_key.trim() : "";
+  let credentialReady = false;
   try {
     const credentials = ctx.get?.("credentials");
     if (credentials?.resolve) {
+      credentialReady = true;
       const hit = await credentials.resolve(refName); // CredentialRef is a plain string at runtime
-      if (hit?.value) return { key: hit.value, from: `credential store ${refName} (${hit.source})` };
+      if (hit?.value) return { key: hit.value, from: `credential store ${refName} (${hit.source})`, resolved: true };
     }
   } catch (error) {
+    credentialReady = false;
     ctx.logger?.warn?.(`dsh-docchain: cannot resolve credential ${refName}: ${error?.message ?? error}`);
   }
-  const literal = typeof config?.docchain_api_key === "string" ? config.docchain_api_key.trim() : "";
-  return literal ? { key: literal, from: "row config" } : { key: "", from: "" };
+  // A row literal is a definite value regardless of the credential service.
+  if (literal) return { key: literal, from: "row config", resolved: true };
+  // No literal: authoritative only when the credential service actually answered.
+  return { key: "", from: "", resolved: credentialReady };
 }
 
 /**
@@ -100,8 +114,11 @@ async function resolveApiKey(ctx, config) {
  * projection of what the row config resolves to right now — rebuilt from
  * scratch on every materialization, never merged over its previous content —
  * so a value cleared in the UI disappears from it instead of lingering, and
- * the scripts fall through to lower-priority config or their default. Writes
- * only on content change so an unchanged re-materialization stays silent.
+ * the scripts fall through to lower-priority config or their default. One
+ * exception guards the boot race: when the credential service was not ready to
+ * answer (`resolved: false`), an empty key is not authoritative, so the
+ * previously materialized `docchain_api_key` is preserved rather than erased.
+ * Writes only on content change so an unchanged re-materialization stays silent.
  * Manual overrides belong in the layers the scripts read before this file
  * (env vars, per-skill config.json), which this mirror never touches.
  * @param ctx - the plugin context.
@@ -114,20 +131,39 @@ async function materializeServiceConfig(ctx, config) {
   const rawUrl = config?.docchain_url;
   const urlValue = typeof rawUrl === "string" ? rawUrl : typeof rawUrl?.get === "function" ? rawUrl.get() : undefined;
   const url = typeof urlValue === "string" ? urlValue.trim() : "";
-  const { key, from } = await resolveApiKey(ctx, config);
+  const { key, from, resolved } = await resolveApiKey(ctx, config);
+
+  // Read the current state file once: it feeds both the unchanged-content
+  // short-circuit below and the key-preservation guard for a not-ready resolve.
+  let current = "";
+  try {
+    current = readFileSync(CONFIG_FILE, "utf8");
+  } catch {
+    // first write; no prior content
+  }
+
   const next = {};
   if (url) next.docchain_url = url;
-  if (key) next.docchain_api_key = key;
-  const rendered = `${JSON.stringify(next, null, 2)}\n`;
-  try {
-    if (readFileSync(CONFIG_FILE, "utf8") === rendered) return; // unchanged; no rewrite, no log
-  } catch {
-    // first write
+  if (key) {
+    next.docchain_api_key = key;
+  } else if (!resolved) {
+    // Credential service not ready → empty resolve is not authoritative; keep
+    // whatever key the state file already holds instead of wiping it.
+    let preserved = "";
+    try {
+      const parsed = JSON.parse(current);
+      if (typeof parsed?.docchain_api_key === "string") preserved = parsed.docchain_api_key;
+    } catch {
+      // unparseable prior content; nothing to preserve
+    }
+    if (preserved) next.docchain_api_key = preserved;
   }
+  const rendered = `${JSON.stringify(next, null, 2)}\n`;
+  if (current === rendered) return; // unchanged; no rewrite, no log
   try {
     mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
     writeFileSync(CONFIG_FILE, rendered, { mode: 0o600 });
-    ctx.logger?.info?.(`dsh-docchain: wrote docchain service config to ${CONFIG_FILE}${key ? ` (key from ${from})` : ""}`);
+    ctx.logger?.info?.(`dsh-docchain: wrote docchain service config to ${CONFIG_FILE}${next.docchain_api_key ? ` (key from ${from || "preserved"})` : ""}`);
   } catch (error) {
     ctx.logger?.warn?.(`dsh-docchain: cannot write ${CONFIG_FILE}: ${error?.message ?? error}`);
   }
@@ -194,7 +230,12 @@ function scanSkillBundles(logger) {
   return skills;
 }
 
-export const inject = ["skills"];
+// `credentials` is a declared dependency so cordis activates this plugin only
+// after the credential service finishes its async init (loading
+// `.credentials.yaml`); without it the activation-time materialization races
+// the service and resolves an empty key. `resolveApiKey` still guards against
+// an unready service defensively.
+export const inject = ["skills", "credentials"];
 
 export function apply(ctx, config) {
   const fail = (error) => ctx.logger?.warn?.(`dsh-docchain: materialize failed: ${error?.message ?? error}`);
