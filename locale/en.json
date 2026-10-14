@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Docchain",
-    "description": "docchain document search (filename, content, metadata), topic listing, bulk document upload, document-to-Markdown conversion, plus a deep-research workflow, bundled as a DSH plugin."
+    "description": "Knowledge base and document conversion plugin: filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown parsing, plus a deep-research workflow."
   }
 }

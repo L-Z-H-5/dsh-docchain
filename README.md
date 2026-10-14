@@ -2,14 +2,14 @@
 
 English | [中文](./README.zh-CN.md)
 
-A DSH plugin that bundles docchain document search (filename, content, and metadata), topic listing, bulk document upload, document-to-Markdown conversion, plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
+A DSH knowledge base and document conversion plugin bundling filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown conversion, plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
 
 | Skill | Kind | Description |
 |---|---|---|
 | `docchain-filename-search` | SKILL.md + Node.js script | Find documents whose filename matches keywords, across topics |
 | `docchain-content-search` | SKILL.md + Node.js script | Search document content by keyword; returns line numbers and content; `or`/`and` operators |
 | `docchain-meta-search` | SKILL.md + Node.js script | Query documents by custom metadata fields (string/number/time, exact and range) |
-| `docchain-topic-info` | SKILL.md + Node.js script | List docchain topics with pagination |
+| `docchain-topic-info` | SKILL.md + Node.js script | List docchain topics with pagination and name keyword filter |
 | `docchain-upload` | SKILL.md + Node.js script | Upload a local file or a whole folder to a given docchain topic in bulk |
 | `doc2markdown` | SKILL.md + Node.js script | Convert docx/doc/pdf/pptx/xlsx/images and many more formats to Markdown via the docchain parsing service; results land next to the source file |
 | `deep-research-advanced` | SKILL.md only | Orchestrator-style multi-subagent deep research workflow (pure instructions, no scripts) |
@@ -122,14 +122,15 @@ Filter documents by custom metadata field conditions — string, number, and tim
 
 ### docchain-topic-info — list topics
 
-Lists the topics in a docchain system with pagination. Often a first step before other skills: get the topic IDs, then search or upload within a topic.
+Lists the topics in a docchain system with pagination, optionally filtered by a name keyword. Often a first step before other skills: get the topic IDs, then search or upload within a topic.
 
-**How to use it** — just ask what topics exist; optionally give a page number and page size.
+**How to use it** — just ask what topics exist; optionally give a page number, page size, or a name keyword.
 
 **Examples:**
 
 - "What topics are there?"
 - "Show page 2 of the topic list, 10 per page"
+- "Find topics whose name contains 'test'"
 
 ### docchain-upload — bulk document upload
 
