@@ -2,7 +2,7 @@
 /**
  * Docchain 主题信息查询脚本
  *
- * 查询主题列表，支持分页。
+ * 查询主题列表，支持分页与关键字过滤。
  *
  * dsh-docchain integration: the service URL and API key resolve through the
  * package's shared config chain (env vars > skill scripts/config.json >
@@ -38,6 +38,7 @@ docchain_api_key: 环境的账号验证方式（必填）
 const ARG_SPEC = {
     page: { type: 'int', default: 1 },
     size: { type: 'int', default: 20 },
+    keyword: { type: 'string', default: null },
 };
 
 /**
@@ -235,12 +236,16 @@ function getConfig() {
  * 分页查询主题列表。
  * @param {number} page - 页码，默认1
  * @param {number} size - 每页数量，默认20
+ * @param {string|null} [keyword=null] - 主题名称关键字过滤，为空时不传该参数
  * @returns {Promise<object>} 包含主题列表的 JSON 对象
  */
-async function listTopics(page = 1, size = 20) {
+async function listTopics(page = 1, size = 20, keyword = null) {
     const config = getConfig();
     const url = `${config.docchain_url.replace(/\/+$/, '')}/v1/topic/list_by_pagination`;
     const params = new URLSearchParams({ page: String(page), size: String(size) });
+    if (keyword && String(keyword).trim()) {
+        params.set('keyword', String(keyword).trim());
+    }
     const endpoint = `${url}?${params.toString()}`;
 
     const headers = { 'X-Api-Key': config.docchain_api_key };
@@ -306,7 +311,7 @@ async function main() {
     const args = parseArgs(process.argv.slice(2), ARG_SPEC);
 
     // 查询主题列表
-    const result = await listTopics(args.page, args.size);
+    const result = await listTopics(args.page, args.size, args.keyword);
 
     // 直接输出 JSON 格式
     console.log(JSON.stringify(formatResults(result)));
