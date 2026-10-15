@@ -19,7 +19,7 @@
 从 GitHub 仓库安装（推荐；纯 JS 包，无需构建步骤）：
 
 ```text
-dsh plugin add github:wct-lab/dsh-docchain
+dsh plugin --profile web add github:wct-lab/dsh-docchain
 ```
 
 或从本地目录安装：

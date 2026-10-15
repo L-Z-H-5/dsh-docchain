@@ -19,7 +19,7 @@ A DSH knowledge base and document conversion plugin bundling filename/content/me
 From the GitHub repository (recommended; pure-JS package, no build step needed):
 
 ```text
-dsh plugin add github:wct-lab/dsh-docchain
+dsh plugin --profile web add github:wct-lab/dsh-docchain
 ```
 
 Or from a local checkout:
