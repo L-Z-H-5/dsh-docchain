@@ -159,14 +159,6 @@ function activeEnvironment(config, logger) {
     logger?.warn?.(`dsh-docchain: active environment "${environments.active}" is missing; using docchain_url`);
     return undefined;
   }
-  // A URL edited after the environment was selected means the user chose a
-  // custom address. The settings page applies the same rule, so the two can
-  // never disagree about which address is in force.
-  const url = readField(config, "docchain_url");
-  if (url && url !== hit.url) {
-    logger?.info?.(`dsh-docchain: docchain_url "${url}" differs from environment "${hit.name}"; treating it as a custom address`);
-    return undefined;
-  }
   return hit;
 }
 

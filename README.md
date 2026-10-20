@@ -88,9 +88,9 @@ To change values, either:
 The configuration page keeps a list of **saved environments**, so pointing the skills at another docchain service no longer means retyping a URL and a key.
 
 - The page shows one row with the environment currently in force. Open it to see the list: pick another, add one, or edit / delete an entry.
-- Picking an entry takes effect immediately — no Save press, no restart. The `Save` button below still governs the service URL and API key fields.
+- Picking an entry takes effect immediately — no Save press, no restart.
 - Each environment stores its own URL and its own credential reference, so switching back never asks for the key again. Keys stay in the credential store and are only ever written, never read back.
-- Editing the service URL by hand switches the page to **Custom**: the saved list is left untouched, and picking an entry again returns to it.
+- The page manages environments only: an address and a key are properties of an environment, edited inside its row — there is no separate pair of fields to keep in sync. With nothing saved the row reads "no environment selected", and the legacy `docchain_url` / `docchain_api_key_ref` values remain the fallback (editable in the profile's `cordis.patch.yml`).
 - Deleting an entry also deletes its credential — unless another environment still uses the same reference, or it is the row's own fallback reference. The entry in force cannot be deleted; switch away first.
 
 Where the data lives:
