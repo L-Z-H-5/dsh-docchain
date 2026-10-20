@@ -1,6 +1,6 @@
 ---
 name: docchain-topic-info
-description: 查询 docchain 主题列表，支持分页与按名称关键字过滤。触发关键词：查看主题、主题列表、所有主题、有哪些主题、主题信息、搜主题、按关键字查主题。
+description: 查询 docchain 文档主题（topic_id，非 Kafka Topic）列表，支持分页与按名称关键字过滤。触发关键词：查看主题、主题列表、所有主题、有哪些主题、主题信息、文档主题、搜主题、按关键字查主题。
 ---
 
 # /docchain-topic-info — 主题信息查询
