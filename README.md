@@ -44,6 +44,8 @@ Four ways to provide them, in **priority order** (higher wins):
 3. the plugin state file `~/.dsh/storages/docchain-config.json` (written by the plugin config — see below);
 4. package-level `skills/docchain_config.json` (file-drop distribution fallback; the package ships only `docchain_config.example.json` as a template).
 
+Environment variables outrank everything below them, including the environment selected on the plugin's configuration page — see [Switching between environments](#switching-between-environments).
+
 Config file format (all JSON-based):
 
 ```json
@@ -66,10 +68,13 @@ The plugin follows the official credential pattern. Its Config schema declares:
 | `docchain_url` | Service endpoint; volatile, editable on the configuration page |
 | `docchain_api_key_ref` | Credential reference name for the key; default `DOCCHAIN_API_KEY` |
 | `docchain_api_key` | Fallback literal key (not recommended; the store wins over it) |
+| `docchain_environments` | Saved environments (JSON): name, URL and credential reference per entry; the active entry outranks `docchain_url` |
 
 The key's value lives in the **credential store** `~/.dsh/.credentials.yaml` (`refs:` section, owner-only permissions) — save it through the configuration page or edit the file directly; changes hot-reload. It can also come from the launch environment under the same variable name. On activation, whenever a stored credential changes, and whenever this row's settings are saved, the resolved values are mirrored into `~/.dsh/storages/docchain-config.json` (permissions `0600`): the file is a pure projection of the current resolution, so a cleared config entry disappears from it; the scripts read it on every run.
 
 Key resolution order: credential store (launch env > stored file) > `docchain_api_key` row literal.
+
+The reference name *is* configuration: **leaving `docchain_api_key_ref` unconfigured is a supported state, not a broken one.** The page reports no key and the scripts exit with a configuration error instead of falling back to another reference — a present-but-wrong key queries the wrong account silently, which is far harder to notice than a failure.
 
 To change values, either:
 
@@ -77,6 +82,29 @@ To change values, either:
 - save/update `DOCCHAIN_API_KEY` in the credential store — takes effect without touching this plugin, or
 - edit `~/.dsh/storages/docchain-config.json` directly (takes effect on the next script run; the plugin rewrites it from the resolved config on activation and config changes — for durable overrides use env vars or a per-skill config.json), or
 - set `docchain_url` / `docchain_api_key_ref` / `docchain_api_key` in the plugin's config row (patch `config` / preset override) and re-activate the plugin.
+
+## Switching between environments
+
+The configuration page keeps a list of **saved environments**, so pointing the skills at another docchain service no longer means retyping a URL and a key.
+
+- The page shows one row with the environment currently in force. Open it to see the list: pick another, add one, or edit / delete an entry.
+- Picking an entry takes effect immediately — no Save press, no restart. The `Save` button below still governs the service URL and API key fields.
+- Each environment stores its own URL and its own credential reference, so switching back never asks for the key again. Keys stay in the credential store and are only ever written, never read back.
+- Editing the service URL by hand switches the page to **Custom**: the saved list is left untouched, and picking an entry again returns to it.
+- Deleting an entry also deletes its credential — unless another environment still uses the same reference, or it is the row's own fallback reference. The entry in force cannot be deleted; switch away first.
+
+Where the data lives:
+
+| What | Where |
+|---|---|
+| The environment list (name, URL, credential reference) | `config.docchain_environments` in the profile's `cordis.patch.yml` |
+| Each environment's key | `refs:` in `~/.dsh/.credentials.yaml`, under `DOCCHAIN_API_KEY__<ID>` |
+| The values in force | `~/.dsh/storages/docchain-config.json`, rewritten on every switch |
+
+Two limits worth knowing:
+
+- **An environment variable wins.** Every skill script reads `DOCCHAIN_URL` / `DOCCHAIN_API_KEY` before the projection file, so a value exported at launch silently outranks whatever the page selects. Do not set them if you want the page to be authoritative.
+- Two browser tabs editing the same row: the last save wins.
 
 ## How it works
 
@@ -171,3 +199,5 @@ dsh plugin remove dsh-docchain
 ```
 
 (or `plugin_manager remove_bundle`).
+
+Uninstalling does not clean up what this plugin wrote: `~/.dsh/storages/docchain-config.json` and any `DOCCHAIN_API_KEY__*` entries in `~/.dsh/.credentials.yaml` stay behind and must be removed by hand.

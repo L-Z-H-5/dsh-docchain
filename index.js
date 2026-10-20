@@ -28,6 +28,13 @@
 //   per-skill config.json). The file is a pure projection of what the row
 //   config currently resolves to: a value cleared in the UI disappears from
 //   it instead of lingering, so the scripts fall through to their defaults.
+// - `docchain_environments` holds the user's saved environments as JSON
+//   (`{ version, active, items: [{ id, name, url, keyRef }] }`). An active
+//   environment outranks `docchain_url` / `docchain_api_key_ref`, so switching
+//   is a single settings write while every script keeps reading one projection
+//   file. The list is untrusted input: an unparseable or wrongly-shaped payload
+//   degrades to "no environments" (the legacy fields win) rather than to an
+//   empty list that would erase the user's selection.
 import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -65,20 +72,115 @@ export const DEFAULT_KEY_REF = "DOCCHAIN_API_KEY";
  */
 export const Config = z.object({
   docchain_url: z.string().volatile().description("docchain 服务地址，如 http://<host>:7100/llmdoc"),
-  docchain_api_key_ref: z.string().description("API Key 的凭据引用名，默认 DOCCHAIN_API_KEY"),
+  docchain_api_key_ref: z.string().volatile().description("API Key 的凭据引用名，默认 DOCCHAIN_API_KEY"),
   docchain_api_key: z.string().description("备用：直接写死 Key（不推荐，凭据存储优先）"),
+  docchain_environments: z
+    .string()
+    .volatile()
+    .description("常用环境列表（JSON）：{version,active,items:[{id,name,url,keyRef}]}；有生效环境时优先于 docchain_url"),
 });
+
+/**
+ * Read one row-config field as a trimmed string.
+ *
+ * `volatile` fields arrive as a reference wrapper (`{ get() }`) that the host
+ * updates in place on settings writes; plain fields arrive as strings. Reading
+ * both through one helper keeps the unwrapping rule in a single place — a field
+ * promoted to `volatile` must not silently fall back to a default just because
+ * a wrapper is not a string.
+ * @param config - the row config.
+ * @param name - the field name.
+ * @returns the trimmed string value, or "" when absent.
+ */
+function readField(config, name) {
+  const raw = config?.[name];
+  const value = typeof raw === "string" ? raw : typeof raw?.get === "function" ? raw.get() : undefined;
+  return typeof value === "string" ? value.trim() : "";
+}
 
 /** The credential-reference name the row config resolves its API key from. */
 function keyRefName(config) {
-  return typeof config?.docchain_api_key_ref === "string" && config.docchain_api_key_ref.trim()
-    ? config.docchain_api_key_ref.trim()
-    : DEFAULT_KEY_REF;
+  return readField(config, "docchain_api_key_ref") || DEFAULT_KEY_REF;
 }
 
 /**
- * Resolve the API key for the row config: the credential store wins (managed,
- * hot-reloadable), the row literal is the fallback.
+ * Parse the `docchain_environments` field.
+ *
+ * Returns `null` when the feature is unused or the payload cannot be trusted
+ * (absent, malformed JSON, wrong shape). Callers must treat `null` as "no
+ * environments" and fall back to the legacy single-URL fields: a corrupted list
+ * must never degrade into an empty list that would erase the user's selection.
+ * @param config - the row config.
+ * @param logger - plugin logger, for the degradation warning.
+ * @returns `{ active, items }` or `null`.
+ */
+function parseEnvironments(config, logger) {
+  const text = readField(config, "docchain_environments");
+  if (!text) return null;
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    logger?.warn?.(`dsh-docchain: cannot parse docchain_environments (${error?.message ?? error}); using docchain_url`);
+    return null;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.items)) {
+    logger?.warn?.("dsh-docchain: docchain_environments is not a { version, active, items[] } object; using docchain_url");
+    return null;
+  }
+  const items = [];
+  for (const item of data.items) {
+    if (!item || typeof item !== "object") continue;
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    const url = typeof item.url === "string" ? item.url.trim() : "";
+    if (!id || !/^https?:\/\//i.test(url)) continue;
+    const keyRef = typeof item.keyRef === "string" ? item.keyRef.trim() : "";
+    items.push({
+      id,
+      name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : id,
+      url,
+      keyRef: keyRef || DEFAULT_KEY_REF,
+    });
+  }
+  return { active: typeof data.active === "string" ? data.active.trim() : "", items };
+}
+
+/**
+ * The environment the row currently points at, or `undefined` when none is
+ * active or the active id no longer exists.
+ * @param config - the row config.
+ * @param logger - plugin logger, for the missing-active warning.
+ */
+function activeEnvironment(config, logger) {
+  const environments = parseEnvironments(config, logger);
+  if (!environments || !environments.active) return undefined;
+  const hit = environments.items.find((item) => item.id === environments.active);
+  if (!hit) {
+    logger?.warn?.(`dsh-docchain: active environment "${environments.active}" is missing; using docchain_url`);
+    return undefined;
+  }
+  // A URL edited after the environment was selected means the user chose a
+  // custom address. The settings page applies the same rule, so the two can
+  // never disagree about which address is in force.
+  const url = readField(config, "docchain_url");
+  if (url && url !== hit.url) {
+    logger?.info?.(`dsh-docchain: docchain_url "${url}" differs from environment "${hit.name}"; treating it as a custom address`);
+    return undefined;
+  }
+  return hit;
+}
+
+/** Every credential reference this row may consume: the row's own plus every environment's. */
+function collectRefs(config, logger) {
+  const refs = new Set([keyRefName(config)]);
+  const environments = parseEnvironments(config, logger);
+  if (environments) for (const item of environments.items) refs.add(item.keyRef);
+  return refs;
+}
+
+/**
+ * Resolve one API key: the credential store wins (managed, hot-reloadable), the
+ * row literal is the fallback.
  *
  * Returns `{ key, from, resolved }`. `resolved` says whether an empty `key` is
  * authoritative: `true` when the credential service answered (so an absent ref
@@ -87,10 +189,11 @@ function keyRefName(config) {
  * call raced the service's async init and cannot yet distinguish "no key" from
  * "not loaded". Callers must NOT erase a previously materialized key on a
  * `resolved: false` empty result.
+ * @param ctx - the plugin context.
+ * @param refName - the credential reference to resolve.
+ * @param literal - the row-config fallback value.
  */
-async function resolveApiKey(ctx, config) {
-  const refName = keyRefName(config);
-  const literal = typeof config?.docchain_api_key === "string" ? config.docchain_api_key.trim() : "";
+async function resolveApiKey(ctx, refName, literal) {
   let credentialReady = false;
   try {
     const credentials = ctx.get?.("credentials");
@@ -125,13 +228,14 @@ async function resolveApiKey(ctx, config) {
  * @param config - the resolved row config.
  */
 async function materializeServiceConfig(ctx, config) {
-  // `docchain_url` is volatile: its resolved value is a reference wrapper
-  // (`{ get() }`) the host updates in place on settings writes, so read
-  // through `.get()` to pick up the latest accepted value.
-  const rawUrl = config?.docchain_url;
-  const urlValue = typeof rawUrl === "string" ? rawUrl : typeof rawUrl?.get === "function" ? rawUrl.get() : undefined;
-  const url = typeof urlValue === "string" ? urlValue.trim() : "";
-  const { key, from, resolved } = await resolveApiKey(ctx, config);
+  // An active environment outranks the legacy single-URL fields, so switching
+  // environments is one settings write and nothing under skills/ has to know
+  // environments exist: the skill scripts keep reading this projection file.
+  const environment = activeEnvironment(config, ctx.logger);
+  const url = environment ? environment.url : readField(config, "docchain_url");
+  const refName = environment ? environment.keyRef : keyRefName(config);
+  const literal = environment ? "" : readField(config, "docchain_api_key");
+  const { key, from, resolved } = await resolveApiKey(ctx, refName, literal);
 
   // Read the current state file once: it feeds both the unchanged-content
   // short-circuit below and the key-preservation guard for a not-ready resolve.
@@ -163,7 +267,10 @@ async function materializeServiceConfig(ctx, config) {
   try {
     mkdirSync(path.dirname(CONFIG_FILE), { recursive: true });
     writeFileSync(CONFIG_FILE, rendered, { mode: 0o600 });
-    ctx.logger?.info?.(`dsh-docchain: wrote docchain service config to ${CONFIG_FILE}${next.docchain_api_key ? ` (key from ${from || "preserved"})` : ""}`);
+    const origin = environment ? `env ${environment.name}` : "docchain_url";
+    ctx.logger?.info?.(
+      `dsh-docchain: wrote docchain service config to ${CONFIG_FILE} (${origin}${next.docchain_api_key ? `, key from ${from || "preserved"}` : ""})`,
+    );
   } catch (error) {
     ctx.logger?.warn?.(`dsh-docchain: cannot write ${CONFIG_FILE}: ${error?.message ?? error}`);
   }
@@ -239,6 +346,17 @@ export const inject = ["skills", "credentials"];
 
 export function apply(ctx, config) {
   const fail = (error) => ctx.logger?.warn?.(`dsh-docchain: materialize failed: ${error?.message ?? error}`);
+  // Every skill script checks its own environment variables before this
+  // projection file, so a variable set at launch silently outranks whatever the
+  // settings page selects. Say so once, loudly: otherwise a working switch looks
+  // broken, and the cause is a file this plugin does not own.
+  for (const name of ["DOCCHAIN_URL", "DOCCHAIN_API_KEY"]) {
+    if (process.env[name]) {
+      ctx.logger?.warn?.(
+        `dsh-docchain: ${name} is set in the launch environment and outranks the plugin config; switching environments will not change what the skill scripts use`,
+      );
+    }
+  }
   materializeServiceConfig(ctx, config).catch(fail);
   const disposeProvider = ctx.skills.registerProvider((control) => {
     // Best-effort watch on the shipped skills root; coalesce invalidations.
@@ -319,7 +437,10 @@ export function apply(ctx, config) {
   // without a restart. The event carries the changed ref; re-resolving on any
   // update is cheap and a no-op write when nothing changed.
   const offCredentialUpdate = ctx.on("credentials/reference-updated", (ref) => {
-    if (ref !== keyRefName(config)) return; // some other reference changed
+    // The row's own reference, or any environment's: storing a key for the
+    // environment the user just switched to must reach the scripts without a
+    // restart, and a silently-wrong filter here would look like a broken switch.
+    if (!collectRefs(config, ctx.logger).has(ref)) return;
     materializeServiceConfig(ctx, config).catch(fail);
   });
   // Re-materialize when this row's settings document changes (the Plugins

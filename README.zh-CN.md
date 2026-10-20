@@ -44,6 +44,8 @@ plugin_manager install_bundle target=<本目录绝对路径>
 3. 插件状态文件 `~/.dsh/storages/docchain-config.json`（插件配置写入，见下）；
 4. 包内 `skills/docchain_config.json`（文件分发兜底；包内只带模板 `docchain_config.example.json`）。
 
+环境变量优先级最高，高于其下所有来源，也包括插件配置页上选中的环境——见 [多环境切换](#多环境切换)。
+
 配置文件格式（均为 JSON）：
 
 ```json
@@ -66,10 +68,13 @@ plugin_manager install_bundle target=<本目录绝对路径>
 | `docchain_url` | 服务地址；volatile 字段，可在配置页编辑 |
 | `docchain_api_key_ref` | API Key 的凭据引用名，默认 `DOCCHAIN_API_KEY` |
 | `docchain_api_key` | 备用：直接写死 Key（不推荐；凭据存储优先） |
+| `docchain_environments` | 常用环境列表（JSON）：每个环境的名称、地址与凭据引用名；生效环境优先于 `docchain_url` |
 
 Key 的实际值保存在**凭据存储** `~/.dsh/.credentials.yaml`（`refs:` 段，仅本用户可读）——可通过配置页写入或直接编辑文件，改动热生效；也可以用同名启动环境变量提供。激活时、存储凭据变化时、以及本行设置保存时，解析出的值会被镜像写入 `~/.dsh/storages/docchain-config.json`（权限 `0600`）：该文件是当前解析结果的纯投影，配置清空后对应条目随之消失；脚本每次运行读取该文件。
 
 Key 解析顺序：凭据存储（启动环境 > 存储文件）> `docchain_api_key` 行内字面值。
+
+引用名本身就是配置：**让 `docchain_api_key_ref` 保持未配置是受支持的状态，不是故障。** 页面会显示「未配置」，脚本以「配置不完整」退出，而不会回落到别的引用——一把「存在但不对」的 key 会静默查到错误的账号，比直接报错难发现得多。
 
 修改配置的方式：
 
@@ -77,6 +82,29 @@ Key 解析顺序：凭据存储（启动环境 > 存储文件）> `docchain_api_
 - 在凭据存储中保存/更新 `DOCCHAIN_API_KEY`——无需触碰本插件即生效；或
 - 直接编辑 `~/.dsh/storages/docchain-config.json`（下一次脚本运行即生效；插件在激活或配置变化时会按解析结果重写该文件，需要长期覆盖请用环境变量或技能级 config.json）；或
 - 在插件 config 行（patch `config` / preset override）设置 `docchain_url` / `docchain_api_key_ref` / `docchain_api_key` 后重新激活插件。
+
+## 多环境切换
+
+配置页可以保存一组**常用环境**，换 docchain 服务时不必再重输地址与 Key。
+
+- 页面顶部只显示当前生效的环境；点开展开列表，可切换、新增、编辑、删除。
+- 点选即生效——不用按保存、不用重启。列表下方的「保存」按钮仍然只管服务地址与 API Key 两个输入框。
+- 每个环境各自保存地址与独立的凭据引用，所以切回去不需要重新输入 Key。Key 始终存在凭据存储里，只写不读。
+- 手动修改服务地址会进入**自定义**状态：环境列表原样不动，再点任一环境即回到它。
+- 删除环境会连带删除它的凭据——除非还有别的环境共用同一引用，或它就是本行自己的兜底引用。正在生效的环境不能删除，需先切走。
+
+数据存放位置：
+
+| 内容 | 位置 |
+|---|---|
+| 环境列表（名称、地址、凭据引用名） | profile 的 `cordis.patch.yml` 中 `config.docchain_environments` |
+| 各环境的 Key | `~/.dsh/.credentials.yaml` 的 `refs:` 段，键名形如 `DOCCHAIN_API_KEY__<ID>` |
+| 当前生效值 | `~/.dsh/storages/docchain-config.json`，每次切换重写 |
+
+两个需要知道的限制：
+
+- **环境变量优先。** 每个技能脚本都先读 `DOCCHAIN_URL` / `DOCCHAIN_API_KEY`，再读投影文件，所以启动时导出的变量会静默压过页面上的选择。想让页面说了算，就不要设置它们。
+- 两个标签页同时改同一行：后保存者覆盖。
 
 ## 工作机制
 
@@ -171,3 +199,5 @@ dsh plugin remove dsh-docchain
 ```
 
 （或 `plugin_manager remove_bundle`）。
+
+卸载不会清理本插件写下的内容：`~/.dsh/storages/docchain-config.json` 与 `~/.dsh/.credentials.yaml` 中的 `DOCCHAIN_API_KEY__*` 条目会保留，需要手动删除。
