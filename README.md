@@ -108,7 +108,7 @@ Two limits worth knowing:
 
 ### Topics
 
-Each environment can also pre-select up to **50 topics**, so a later request can say "search this topic" without naming an ID.
+Each environment can also pre-select up to **10 topics**, so a later request can say "search this topic" without naming an ID.
 
 - The topic list comes from the active environment: keyword search on the topic name (a substring match, case-insensitive, so the full name narrows it to one row) plus paging. Each row shows the `topic_id` and the name.
 - The browser never holds the API key, so the page asks the host's same-origin route `GET /plugin/dsh-docchain/topics` and the host queries the service on its behalf.

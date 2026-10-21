@@ -56,7 +56,7 @@ const TOPIC_PAGE_MAX = 50;
 /** How long one topic-list answer is reused; typing in the search box must not hammer the service. */
 const TOPIC_CACHE_MS = 10_000;
 /** How many topics one environment may pre-select. */
-export const MAX_SELECTED_TOPICS = 50;
+export const MAX_SELECTED_TOPICS = 10;
 /** Upper bound for the upstream request. */
 const TOPIC_TIMEOUT_MS = 10_000;
 
