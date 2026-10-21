@@ -451,6 +451,15 @@ async function materializeServiceConfig(ctx, config) {
     }
     if (preserved) next.docchain_api_key = preserved;
   }
+  // The selected topics travel with the projection so a script can default to
+  // "the topic chosen on the page" without parsing the profile's YAML. Only an
+  // active environment can carry them; a plain `docchain_url` row has none, and
+  // the keys are then absent rather than empty — a reader distinguishes
+  // "no environment" from "environment with nothing selected".
+  if (environment && environment.topics.length) {
+    next.docchain_topic_ids = environment.topics.map((topic) => topic.id);
+    next.docchain_topic_names = environment.topics.map((topic) => topic.name);
+  }
   const rendered = `${JSON.stringify(next, null, 2)}\n`;
   if (current === rendered) return; // unchanged; no rewrite, no log
   try {

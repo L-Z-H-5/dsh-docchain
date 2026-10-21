@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Docchain",
-    "description": "Knowledge base and document conversion plugin: filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown parsing, switchable docchain environments with per-environment topic selection, plus a deep-research workflow."
+    "description": "Knowledge base and document conversion plugin: filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown parsing, image-similarity search, switchable docchain environments with per-environment topic selection, plus a deep-research workflow."
   }
 }

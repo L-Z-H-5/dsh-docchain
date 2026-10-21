@@ -14,6 +14,7 @@ Its configuration page goes beyond a single endpoint: it keeps a list of **saved
 | `docchain-topic-info` | SKILL.md + Node.js script | List docchain topics with pagination and a name-or-id keyword filter |
 | `docchain-upload` | SKILL.md + Node.js script | Upload a local file or a whole folder to a given docchain topic in bulk |
 | `doc2markdown` | SKILL.md + Node.js script | Convert docx/doc/pdf/pptx/xlsx/images and many more formats to Markdown via the docchain parsing service; results land next to the source file |
+| `docchain-image-search` | SKILL.md + Node.js script | Find similar images by example: upload one picture, get back matching images with their topic, document and similarity score |
 | `deep-research-advanced` | SKILL.md only | Orchestrator-style multi-subagent deep research workflow (pure instructions, no scripts) |
 
 ## Installation
@@ -199,6 +200,22 @@ Uploads a document (docx, doc, pdf, ppt, xlsx, images, epub, mobi and many more)
 - "Convert 合同.docx to a single Markdown file"
 
 The service URL and API key follow the same config chain as the search scripts, but both are optional: without configuration the public service (`https://lab.hjcloud.com/llmdoc`) is used with anonymous upload.
+
+### docchain-image-search — find similar images
+
+Uploads one local image to the active environment and returns similar pictures found in the documents — **the pictures themselves**, plus their topic (id and name), document name and similarity score. Matched images are downloaded to a temp directory so they can be shown in the conversation.
+
+**How to use it** — attach a photo or screenshot and ask. The docchain API has no global image search, so the search is scoped to topics: by default the topics selected on the configuration page, or `--topic_ids` for others, or `--all` to walk every topic.
+
+- "Which document is this screenshot from?"
+- "Find images like this one"
+
+Things worth knowing:
+
+- `score` is the service's **visual similarity** (0–1; an identical image scores 1), not the assistant's judgement. Read it as a ranking, not an absolute verdict — a low score does not by itself mean "unrelated".
+- Availability depends on the environment's **image vector index**. A deployment that never built one answers every query with an empty list (observed: the same image matches on one instance and returns nothing on another). The script says so instead of pretending the library has nothing.
+- A few images make the service answer HTTP 500 (that picture cannot be processed); the script reports it per topic instead of failing silently.
+- `--all` walks every topic — slow and request-heavy (thousands of queries). Prefer the selected topics when you know them.
 
 ### deep-research-advanced — multi-subagent deep research
 
