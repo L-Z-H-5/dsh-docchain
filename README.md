@@ -213,7 +213,7 @@ Uploads one local image to the active environment and returns similar pictures f
 Things worth knowing:
 
 - `score` is the service's **visual similarity** (0–1; an identical image scores 1), not the assistant's judgement. Read it as a ranking, not an absolute verdict — a low score does not by itself mean "unrelated".
-- Availability depends on the environment's **image vector index**. A deployment that never built one answers every query with an empty list (observed: the same image matches on one instance and returns nothing on another). The script says so instead of pretending the library has nothing.
+- Availability is **per topic**: image vectors are built one topic at a time, so a topic that was never vectorized answers every query with an empty list (observed: on the same instance, topics with vectors match and topics without return nothing). The script says so instead of pretending the library has nothing.
 - A few images make the service answer HTTP 500 (that picture cannot be processed); the script reports it per topic instead of failing silently.
 - `--all` walks every topic — slow and request-heavy (thousands of queries). Prefer the selected topics when you know them.
 
