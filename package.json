@@ -1,9 +1,9 @@
 {
   "name": "dsh-docchain",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
-  "description": "DSH knowledge base and document conversion plugin: filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown conversion, plus a deep-research workflow",
+  "description": "DSH knowledge base and document conversion plugin: filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown conversion, plus a deep-research workflow; the configuration page keeps switchable docchain environments with per-environment topic selection",
   "icon": "assets/icon.png",
   "license": "UNLICENSED",
   "exports": {
