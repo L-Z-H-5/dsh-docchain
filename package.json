@@ -5,7 +5,11 @@
   "type": "module",
   "description": "DSH knowledge base and document conversion plugin: filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown conversion, image-similarity search, plus a deep-research workflow; the configuration page keeps switchable docchain environments with per-environment topic selection",
   "icon": "assets/icon.png",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wct-lab/dsh-docchain"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./lib/client.js",
