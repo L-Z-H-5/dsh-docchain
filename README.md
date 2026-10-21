@@ -4,12 +4,14 @@ English | [中文](./README.zh-CN.md)
 
 A DSH knowledge base and document conversion plugin bundling filename/content/metadata search, topic listing, bulk document upload, document-to-Markdown conversion, plus a multi-subagent deep-research workflow: install once with `plugin_manager install_bundle` and it works on any machine — no manual copying into `~/.agents/skills` required. Built on docchain.
 
+Its configuration page goes beyond a single endpoint: it keeps a list of **saved environments** — each with its own address and its own credential — switches between them in one click, and pre-selects **topics** per environment, so a later request can say "search this topic" without naming an id.
+
 | Skill | Kind | Description |
 |---|---|---|
 | `docchain-filename-search` | SKILL.md + Node.js script | Find documents whose filename matches keywords, across topics |
 | `docchain-content-search` | SKILL.md + Node.js script | Search document content by keyword; returns line numbers and content; `or`/`and` operators |
 | `docchain-meta-search` | SKILL.md + Node.js script | Query documents by custom metadata fields (string/number/time, exact and range) |
-| `docchain-topic-info` | SKILL.md + Node.js script | List docchain topics with pagination and name keyword filter |
+| `docchain-topic-info` | SKILL.md + Node.js script | List docchain topics with pagination and a name-or-id keyword filter |
 | `docchain-upload` | SKILL.md + Node.js script | Upload a local file or a whole folder to a given docchain topic in bulk |
 | `doc2markdown` | SKILL.md + Node.js script | Convert docx/doc/pdf/pptx/xlsx/images and many more formats to Markdown via the docchain parsing service; results land next to the source file |
 | `deep-research-advanced` | SKILL.md only | Orchestrator-style multi-subagent deep research workflow (pure instructions, no scripts) |
@@ -59,16 +61,16 @@ All scripts need only Node.js. Invoke them from the skill's base directory as `n
 
 ## Plugin configuration (recommended)
 
-The plugin ships a **configuration page** in the web client: in `dsh web`, open **Plugins** in the sidebar, find the `dsh-docchain` plugin, and use the configure control on its row. The page edits the service URL (saved to the row config and hot-reloaded through the host settings service) and writes the API key to the credential store. The key is write-only: the page never echoes a stored value, only whether one is set.
+The plugin ships a **configuration page** in the web client: in `dsh web`, open **Plugins** in the sidebar, find the `dsh-docchain` plugin, and use the configure control on its row. The page manages a list of environments; an address and a key are properties of an environment, so they are entered and edited inside its row — there are no separate top-level fields. The key itself goes to the credential store and is write-only: the page never echoes a stored value, only whether one is set.
 
 The plugin follows the official credential pattern. Its Config schema declares:
 
 | Field | Meaning |
 |---|---|
-| `docchain_url` | Service endpoint; volatile, editable on the configuration page |
+| `docchain_url` | Service endpoint used when no environment is active; volatile, kept in sync with the active environment by the page |
 | `docchain_api_key_ref` | Credential reference name for the key; default `DOCCHAIN_API_KEY` |
 | `docchain_api_key` | Fallback literal key (not recommended; the store wins over it) |
-| `docchain_environments` | Saved environments (JSON): name, URL and credential reference per entry; the active entry outranks `docchain_url` |
+| `docchain_environments` | Saved environments (JSON): per entry a name, URL, credential reference and its pre-selected topics; the active entry outranks `docchain_url` |
 
 The key's value lives in the **credential store** `~/.dsh/.credentials.yaml` (`refs:` section, owner-only permissions) — save it through the configuration page or edit the file directly; changes hot-reload. It can also come from the launch environment under the same variable name. On activation, whenever a stored credential changes, and whenever this row's settings are saved, the resolved values are mirrored into `~/.dsh/storages/docchain-config.json` (permissions `0600`): the file is a pure projection of the current resolution, so a cleared config entry disappears from it; the scripts read it on every run.
 
@@ -78,7 +80,7 @@ The reference name *is* configuration: **leaving `docchain_api_key_ref` unconfig
 
 To change values, either:
 
-- use the **configuration page** on the Plugins page — edit the service URL and save/update the API key, or
+- use the **configuration page** on the Plugins page — add or edit an environment, including its address and key, or
 - save/update `DOCCHAIN_API_KEY` in the credential store — takes effect without touching this plugin, or
 - edit `~/.dsh/storages/docchain-config.json` directly (takes effect on the next script run; the plugin rewrites it from the resolved config on activation and config changes — for durable overrides use env vars or a per-skill config.json), or
 - set `docchain_url` / `docchain_api_key_ref` / `docchain_api_key` in the plugin's config row (patch `config` / preset override) and re-activate the plugin.
@@ -124,6 +126,8 @@ The bundle inserts one Host plugin (`dsh-docchain`). At activation it registers 
 
 - Catalog entries come from each SKILL.md frontmatter (`name`, `description`); bodies are re-read on every load.
 - The provider rank is **450** — project roots (`.dsh/skills` = 100, project `.agents/skills` = 200), runtime registrations (250) and `customSkillDirs` (300) keep precedence, as does `~/.dsh/skills` (400); the bundle outranks `~/.agents/skills` (500) and the bundled root (600). In practice: same-name copies in `~/.agents/skills` are shadowed by this bundle; delete them there if you want a single source.
+- Two optional services carry the configuration page: the host registers `GET /plugin/dsh-docchain/topics` on the web server (the browser never holds the API key, so the host queries the active environment on its behalf), and a prompt section that describes the active environment and its selected topics. A profile without those services still gets the skill provider and the projection file.
+- Neither the topic route nor the prompt section caches state of its own: both read the live row config on every call, so switching an environment or a topic reaches the scripts and the next model step without a restart.
 
 ## Skills
 

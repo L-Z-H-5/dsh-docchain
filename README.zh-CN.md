@@ -4,12 +4,14 @@
 
 一个知识库和文档转换 DSH 插件，内置文件名/内容/元数据检索、主题查询、文档批量上传、文档转 Markdown 解析与多子智能体深度研究工作流：任意机器上用 `plugin_manager install_bundle` 安装即可生效，无需手动拷贝到 `~/.agents/skills`。
 
+它的配置页不止一个服务地址：可以保存一组**常用环境**（每个环境有自己的地址与凭据）并一键切换，还能按环境预选**主题**，之后直接说"在这个主题里搜"而不必报 id。
+
 | 技能 | 形态 | 说明 |
 |---|---|---|
 | `docchain-filename-search` | SKILL.md + Node.js 脚本 | 按文件名关键词跨主题查找文档 |
 | `docchain-content-search` | SKILL.md + Node.js 脚本 | 在文档内容中搜索关键词，返回行号和内容，支持"或/且" |
 | `docchain-meta-search` | SKILL.md + Node.js 脚本 | 按自定义元数据字段查询文档（字符串/数值/时间，精确与范围） |
-| `docchain-topic-info` | SKILL.md + Node.js 脚本 | 查询 docchain 主题列表，支持分页与名称关键字过滤 |
+| `docchain-topic-info` | SKILL.md + Node.js 脚本 | 查询 docchain 主题列表，支持分页与名称/ID 关键字过滤 |
 | `docchain-upload` | SKILL.md + Node.js 脚本 | 把本地文件或整个文件夹批量上传到指定 docchain 主题 |
 | `doc2markdown` | SKILL.md + Node.js 脚本 | 把 docx/doc/pdf/pptx/xlsx/图片等常见格式解析为 Markdown，结果保存在源文件同目录 |
 | `deep-research-advanced` | 仅 SKILL.md | 主控式多子智能体深度研究工作流（纯指令，无脚本） |
@@ -59,16 +61,16 @@ plugin_manager install_bundle target=<本目录绝对路径>
 
 ## 插件配置（推荐）
 
-插件自带 Web 客户端的**配置页**：在 `dsh web` 中打开侧栏的「插件」，找到 `dsh-docchain` 插件，点击其行上的配置控件即可打开。页面可编辑服务地址（保存到插件 config 行，经宿主 settings 服务热重载）并把 API Key 写入凭据存储。Key 只写不读：页面不会回显已保存的值，只提示是否已配置。
+插件自带 Web 客户端的**配置页**：在 `dsh web` 中打开侧栏的「插件」，找到 `dsh-docchain` 插件，点击其行上的配置控件即可打开。页面管理的是一组环境；地址与 Key 都是环境的属性，在该环境行内录入与编辑，没有独立的顶层输入框。Key 本身写入凭据存储，只写不读：页面不会回显已保存的值，只提示是否已配置。
 
 插件遵循官方凭据模式，Config schema 包含：
 
 | 字段 | 含义 |
 |---|---|
-| `docchain_url` | 服务地址；volatile 字段，可在配置页编辑 |
+| `docchain_url` | 没有生效环境时使用的服务地址；volatile 字段，由页面与生效环境保持同步 |
 | `docchain_api_key_ref` | API Key 的凭据引用名，默认 `DOCCHAIN_API_KEY` |
 | `docchain_api_key` | 备用：直接写死 Key（不推荐；凭据存储优先） |
-| `docchain_environments` | 常用环境列表（JSON）：每个环境的名称、地址与凭据引用名；生效环境优先于 `docchain_url` |
+| `docchain_environments` | 常用环境列表（JSON）：每个环境的名称、地址、凭据引用名以及预选主题；生效环境优先于 `docchain_url` |
 
 Key 的实际值保存在**凭据存储** `~/.dsh/.credentials.yaml`（`refs:` 段，仅本用户可读）——可通过配置页写入或直接编辑文件，改动热生效；也可以用同名启动环境变量提供。激活时、存储凭据变化时、以及本行设置保存时，解析出的值会被镜像写入 `~/.dsh/storages/docchain-config.json`（权限 `0600`）：该文件是当前解析结果的纯投影，配置清空后对应条目随之消失；脚本每次运行读取该文件。
 
@@ -78,7 +80,7 @@ Key 解析顺序：凭据存储（启动环境 > 存储文件）> `docchain_api_
 
 修改配置的方式：
 
-- 使用插件页上的**配置页**——编辑服务地址、保存/更新 API Key；或
+- 使用插件页上的**配置页**——新增或编辑一个环境（含地址与 Key）；或
 - 在凭据存储中保存/更新 `DOCCHAIN_API_KEY`——无需触碰本插件即生效；或
 - 直接编辑 `~/.dsh/storages/docchain-config.json`（下一次脚本运行即生效；插件在激活或配置变化时会按解析结果重写该文件，需要长期覆盖请用环境变量或技能级 config.json）；或
 - 在插件 config 行（patch `config` / preset override）设置 `docchain_url` / `docchain_api_key_ref` / `docchain_api_key` 后重新激活插件。
@@ -124,6 +126,8 @@ Bundle 插入一个 Host 插件（`dsh-docchain`），激活时在 `ctx.skills` 
 
 - 目录条目来自各 SKILL.md 的 frontmatter（`name`、`description`）；每次加载都重新读文件。
 - 提供者 rank 为 **450**：项目根（`.dsh/skills` = 100、项目 `.agents/skills` = 200）、runtime 注册（250）与 `customSkillDirs`（300）优先级更高，`~/.dsh/skills`（400）同样优先；本 Bundle 高于 `~/.agents/skills`（500）与 bundled 根（600）。也就是说：`~/.agents/skills` 里的同名旧副本会被本 Bundle 覆盖；确认无误后可删除旧副本，只保留单一来源。
+- 配置页依赖两个可选服务：宿主在 Web 服务器上注册 `GET /plugin/dsh-docchain/topics`（浏览器拿不到 API Key，由宿主代当前环境查询），以及一段描述「当前环境 + 已选主题」的 prompt section。缺少这两个服务的部署仍然拥有技能提供者与投影文件。
+- 这两者都不缓存业务状态：每次调用都读实时行配置，所以切换环境或主题后，脚本与下一步模型都能立刻看到，无需重启。
 
 ## 技能详解
 
