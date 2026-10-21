@@ -106,6 +106,18 @@ Two limits worth knowing:
 - **An environment variable wins.** Every skill script reads `DOCCHAIN_URL` / `DOCCHAIN_API_KEY` before the projection file, so a value exported at launch silently outranks whatever the page selects. Do not set them if you want the page to be authoritative.
 - Two browser tabs editing the same row: the last save wins.
 
+### Topics
+
+Each environment can also pre-select up to **50 topics**, so a later request can say "search this topic" without naming an ID.
+
+- The topic list comes from the active environment: keyword search on the topic name (a substring match, case-insensitive, so the full name narrows it to one row) plus paging. Each row shows the `topic_id` and the name.
+- The browser never holds the API key, so the page asks the host's same-origin route `GET /plugin/dsh-docchain/topics` and the host queries the service on its behalf.
+- Selections are stored per environment (`topics` inside its entry), so switching environments switches the topic set with it.
+- While at least one topic is selected, the host injects the active environment and those `topic_id`s into the agent's prompt. The agent then uses them when the user says "the current topic" or omits `topic_ids`; with nothing selected nothing is injected.
+- The service URL must be the API base, not a browser landing page: a `/login?redirect=…` address makes the list fail. Such an environment is marked with ⚠ in the list.
+
+Two limits: a topic deleted on the server stays in the selection (it is a name snapshot, and using it later will fail), and the route is reachable by any local process that can open the port — it reads the active environment's topic names and never returns a credential.
+
 ## How it works
 
 The bundle inserts one Host plugin (`dsh-docchain`). At activation it registers a skill provider on `ctx.skills` that serves every `<skills>/<name>/SKILL.md` directory in this package:

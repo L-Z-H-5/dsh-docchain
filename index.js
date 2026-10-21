@@ -36,6 +36,8 @@
 //   degrades to "no environments" (the legacy fields win) rather than to an
 //   empty list that would erase the user's selection.
 import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
@@ -44,6 +46,19 @@ import z from "@deepseek-ai/schemastery";
 const PROVIDER_NAME = "dsh-docchain";
 const SKILL_SOURCE = "bundled";
 const SKILL_RANK = 450;
+
+/** Same-origin route the configuration page calls to list an environment's topics. */
+export const TOPIC_ROUTE = "/plugin/dsh-docchain/topics";
+/** Topics per page on that route. */
+const TOPIC_PAGE_SIZE = 20;
+/** Hard cap on page size, so one request cannot ask for an entire 2 500-topic list. */
+const TOPIC_PAGE_MAX = 50;
+/** How long one topic-list answer is reused; typing in the search box must not hammer the service. */
+const TOPIC_CACHE_MS = 10_000;
+/** How many topics one environment may pre-select. */
+export const MAX_SELECTED_TOPICS = 50;
+/** Upper bound for the upstream request. */
+const TOPIC_TIMEOUT_MS = 10_000;
 
 const skillsRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "skills");
 
@@ -104,6 +119,33 @@ function keyRefName(config) {
 }
 
 /**
+ * Normalize one environment's pre-selected topics.
+ *
+ * The field is user data that crossed a settings document, so it is treated as
+ * untrusted: entries need an integer id and a non-empty name, and duplicates or
+ * overflow are dropped rather than rejected — a stray entry must not take the
+ * whole environment down with it.
+ * @param raw - the stored `topics` value.
+ * @returns a clean `[{ id, name }]` list.
+ */
+function normalizeTopics(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const topics = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const id = Number(item.id);
+    if (!Number.isInteger(id) || id <= 0 || seen.has(id)) continue;
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    if (!name) continue;
+    seen.add(id);
+    topics.push({ id, name });
+    if (topics.length >= MAX_SELECTED_TOPICS) break;
+  }
+  return topics;
+}
+
+/**
  * Parse the `docchain_environments` field.
  *
  * Returns `null` when the feature is unused or the payload cannot be trusted
@@ -140,6 +182,7 @@ function parseEnvironments(config, logger) {
       name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : id,
       url,
       keyRef: keyRef || DEFAULT_KEY_REF,
+      topics: normalizeTopics(item.topics),
     });
   }
   return { active: typeof data.active === "string" ? data.active.trim() : "", items };
@@ -168,6 +211,160 @@ function collectRefs(config, logger) {
   const environments = parseEnvironments(config, logger);
   if (environments) for (const item of environments.items) refs.add(item.keyRef);
   return refs;
+}
+
+/** Send one JSON answer; every outcome of the topic route goes through here. */
+function sendJson(res, status, body) {
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+  });
+  res.end(JSON.stringify(body));
+}
+
+/**
+ * Ask a docchain service for one page of topics.
+ *
+ * The skill scripts hit the same endpoint; this is the host-side twin, so the
+ * browser never needs the API key (which is write-only by design).
+ * @param baseUrl - the environment's service URL.
+ * @param key - the resolved API key.
+ * @param query - `{ keyword, page, size }`.
+ * @returns `{ total, items: [{ id, name }] }`.
+ */
+function fetchTopics(baseUrl, key, { keyword, page, size }) {
+  return new Promise((resolve, reject) => {
+    let target;
+    try {
+      target = new URL(`${String(baseUrl).replace(/\/+$/, "")}/v1/topic/list_by_pagination`);
+    } catch {
+      reject(new Error("服务地址无效"));
+      return;
+    }
+    target.searchParams.set("page", String(page));
+    target.searchParams.set("size", String(size));
+    if (keyword) target.searchParams.set("keyword", keyword);
+    const isHttps = target.protocol === "https:";
+    const lib = isHttps ? https : http;
+    const request = lib.request(
+      {
+        hostname: target.hostname,
+        port: target.port || (isHttps ? 443 : 80),
+        path: target.pathname + target.search,
+        method: "GET",
+        headers: { "X-Api-Key": key },
+        timeout: TOPIC_TIMEOUT_MS,
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          if (response.statusCode >= 400) {
+            reject(new Error(`服务返回 HTTP ${response.statusCode}`));
+            return;
+          }
+          let data;
+          try {
+            data = JSON.parse(text);
+          } catch {
+            reject(new Error("服务返回的不是 JSON（该环境地址可能不是接口地址）"));
+            return;
+          }
+          if (!data || data.success === false) {
+            reject(new Error(data?.err || "服务返回失败"));
+            return;
+          }
+          const payload = data.data ?? {};
+          const rows = Array.isArray(payload.data) ? payload.data : [];
+          resolve({
+            total: Number(payload.total) || 0,
+            items: rows
+              .map((row) => ({ id: Number(row?.id), name: String(row?.name ?? "") }))
+              .filter((row) => Number.isInteger(row.id) && row.name),
+          });
+        });
+      },
+    );
+    request.on("timeout", () => {
+      request.destroy();
+      reject(new Error("请求超时"));
+    });
+    request.on("error", (error) => reject(error));
+    request.end();
+  });
+}
+
+/**
+ * The `GET /plugin/dsh-docchain/topics` handler.
+ *
+ * The page cannot hold the API key, so it asks this route and the host answers
+ * for the active environment. Every answer is JSON — including failures, whose
+ * `error` the page shows verbatim, so the messages are written for a user
+ * rather than for a log.
+ * @param ctx - the plugin context.
+ * @param config - the resolved row config.
+ */
+function createTopicsHandler(ctx, config) {
+  const cache = new Map();
+  return async (req, res) => {
+    try {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      const keyword = (url.searchParams.get("keyword") ?? "").trim().slice(0, 100);
+      const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);
+      const size = Math.min(
+        TOPIC_PAGE_MAX,
+        Math.max(1, Number.parseInt(url.searchParams.get("size") ?? String(TOPIC_PAGE_SIZE), 10) || TOPIC_PAGE_SIZE),
+      );
+
+      const environment = activeEnvironment(config, ctx.logger);
+      if (!environment) {
+        sendJson(res, 400, { ok: false, error: "未选择环境" });
+        return;
+      }
+      const { key } = await resolveApiKey(ctx, environment.keyRef, "");
+      if (!key) {
+        sendJson(res, 400, { ok: false, error: `环境「${environment.name}」未配置 API Key` });
+        return;
+      }
+
+      const cacheKey = `${environment.id}|${keyword}|${page}|${size}`;
+      const cached = cache.get(cacheKey);
+      if (cached && Date.now() - cached.at < TOPIC_CACHE_MS) {
+        sendJson(res, 200, { ok: true, ...cached.value });
+        return;
+      }
+
+      const result = await fetchTopics(environment.url, key, { keyword, page, size });
+      const value = { total: result.total, page, size, items: result.items };
+      cache.set(cacheKey, { at: Date.now(), value });
+      sendJson(res, 200, { ok: true, ...value });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.logger?.warn?.(`dsh-docchain: topic list failed: ${message}`);
+      sendJson(res, 502, { ok: false, error: message });
+    }
+  };
+}
+
+/**
+ * Prompt text describing the active environment and its selected topics.
+ *
+ * Returns "" when nothing is selected: an empty section costs nothing, while
+ * injecting a statement about "no topic" would add noise for everyone who never
+ * uses this feature. Read live on every assembly, so switching an environment
+ * reaches the next model step without a restart.
+ * @param config - the resolved row config.
+ */
+function topicsPromptText(config) {
+  const environment = activeEnvironment(config);
+  if (!environment || !environment.topics.length) return "";
+  const list = environment.topics.map((topic) => `${topic.name}（topic_id=${topic.id}）`).join("、");
+  return [
+    `docchain 当前环境：${environment.name}（${environment.url}）`,
+    `已选主题：${list}`,
+    "用户说「当前主题 / 这个主题」或未指定 topic_ids 时，使用上述 topic_id；需要该环境的全部主题时调用 docchain-topic-info。",
+  ].join("\n");
 }
 
 /**
@@ -441,6 +638,36 @@ export function apply(ctx, config) {
   const offSettingsUpdate = ctx.on("settings/document-updated", (ns) => {
     if (ns !== PROVIDER_NAME) return; // some other entry's settings changed
     materializeServiceConfig(ctx, config).catch(fail);
+  });
+  // Both services are optional: a profile without a web server or a prompt
+  // registry still gets the skill provider and the projection file, just no
+  // topic list and no injection. `ctx.inject` activates this block when the
+  // services arrive, so load order cannot silently drop the registration.
+  ctx.inject(["webServer", "systemPrompt"], (scope) => {
+    scope.effect(() => {
+      try {
+        return scope.webServer.register({
+          kind: "exact",
+          path: TOPIC_ROUTE,
+          handler: createTopicsHandler(ctx, config),
+        });
+      } catch (error) {
+        scope.logger?.warn?.(`dsh-docchain: cannot register ${TOPIC_ROUTE}: ${error?.message ?? error}`);
+        return () => {};
+      }
+    }, "dsh-docchain: topic list route");
+    scope.effect(() => {
+      try {
+        return scope.systemPrompt.section({
+          name: "dsh-docchain-topics",
+          order: 500,
+          text: () => topicsPromptText(config),
+        });
+      } catch (error) {
+        scope.logger?.warn?.(`dsh-docchain: cannot register the topics prompt section: ${error?.message ?? error}`);
+        return () => {};
+      }
+    }, "dsh-docchain: selected topics prompt");
   });
   return () => {
     try {
