@@ -309,6 +309,12 @@ function createTopicsHandler(ctx, config) {
   const cache = new Map();
   return async (req, res) => {
     try {
+      // Read-only endpoint: refuse anything but GET so a stray POST cannot look
+      // like a query and quietly return a page of results.
+      if ((req.method ?? "GET").toUpperCase() !== "GET") {
+        sendJson(res, 405, { ok: false, error: "只支持 GET 请求" });
+        return;
+      }
       const url = new URL(req.url ?? "/", "http://localhost");
       const keyword = (url.searchParams.get("keyword") ?? "").trim().slice(0, 100);
       const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1);

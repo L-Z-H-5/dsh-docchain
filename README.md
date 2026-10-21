@@ -100,9 +100,9 @@ Where the data lives:
 
 | What | Where |
 |---|---|
-| The environment list (name, URL, credential reference) | `config.docchain_environments` in the profile's `cordis.patch.yml` |
+| The environment list (name, URL, credential reference, selected topics) | `config.docchain_environments` in the profile's `cordis.patch.yml` |
 | Each environment's key | `refs:` in `~/.dsh/.credentials.yaml`, under `DOCCHAIN_API_KEY__<ID>` |
-| The values in force | `~/.dsh/storages/docchain-config.json`, rewritten on every switch |
+| The values in force — URL, key, and the active environment's topics as `docchain_topic_ids` / `docchain_topic_names` | `~/.dsh/storages/docchain-config.json`, rewritten on every switch |
 
 Two limits worth knowing:
 

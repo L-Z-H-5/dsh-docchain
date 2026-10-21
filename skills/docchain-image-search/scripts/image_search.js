@@ -78,8 +78,7 @@ function parseArgs(argv) {
         }
         const spec = ARG_SPEC[name];
         if (!spec) {
-            console.error(`❌ 错误：未知参数：${raw}`);
-            process.exit(1);
+            fail('CONFIG', `未知参数：${raw}；可用参数：--image --topic_ids --all --limit --concurrency --max-seconds`);
         }
         if (spec.flag) {
             args[name] = true;
@@ -89,14 +88,12 @@ function parseArgs(argv) {
             value = argv[i + 1];
             i += 1;
             if (value === undefined) {
-                console.error(`❌ 错误：参数 ${raw} 缺少值`);
-                process.exit(1);
+                fail('CONFIG', `参数 ${raw} 缺少值`);
             }
         }
         if (spec.type === 'int') {
             if (!/^\d+$/.test(value)) {
-                console.error(`❌ 错误：参数 ${raw} 必须是数字`);
-                process.exit(1);
+                fail('CONFIG', `参数 ${raw} 必须是数字`);
             }
             value = parseInt(value, 10);
         }
@@ -214,7 +211,13 @@ function request(urlString, options) {
 /** 用 multipart/form-data 上传一张图片，返回服务端的 file_path。 */
 async function uploadImage(root, key, imagePath, topicId) {
     const bytes = fs.readFileSync(imagePath);
-    const filename = path.basename(imagePath).replace(/"/g, '');
+    // The multipart header is read as latin-1 by many parsers, so a non-ASCII
+    // filename would arrive as mojibake and can be rejected. The name is not
+    // used server-side anyway — the stored path is generated — so keep it ASCII.
+    const filename = path
+        .basename(imagePath)
+        .replace(/[^\x20-\x7E]/g, '_')
+        .replace(/["\\]/g, '_') || 'image';
     const boundary = `----dshdocchain${Date.now().toString(16)}`;
     const head = Buffer.from(
         `--${boundary}\r\n` +
@@ -371,7 +374,7 @@ async function main() {
     const concurrency = Math.min(MAX_CONCURRENCY, Math.max(1, args.concurrency || DEFAULT_CONCURRENCY));
     const startedAt = Date.now();
 
-    // 检索范围：显式 > 扫全环境 > 配置页选中主题
+    // 检索范围优先级：--topic_ids > --all > 配置页选中主题（与 SKILL.md 一致）
     let topicIds = [];
     let scannedAll = false;
     if (args.topic_ids) {
@@ -380,8 +383,10 @@ async function main() {
             .map((value) => Number(String(value).trim()))
             .filter((id) => Number.isInteger(id) && id > 0);
         if (topicIds.length === 0) fail('CONFIG', '--topic_ids 里没有有效的主题 ID。');
-    }
-    if (args.all) {
+        if (args.all) {
+            console.error('提示：同时给了 --topic_ids 和 --all，按 --topic_ids 指定的范围检索。');
+        }
+    } else if (args.all) {
         scannedAll = true;
         try {
             topicIds = await listAllTopicIds(root, config.key);
@@ -393,6 +398,8 @@ async function main() {
     if (topicIds.length === 0) {
         topicIds = config.topicIds;
     }
+    // 同一主题写两次不值得发两次请求，也不该让结果被重复合并。
+    topicIds = [...new Set(topicIds)];
     if (topicIds.length === 0) {
         fail(
             'CONFIG',

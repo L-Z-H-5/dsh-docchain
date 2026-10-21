@@ -100,9 +100,9 @@ Key 解析顺序：凭据存储（启动环境 > 存储文件）> `docchain_api_
 
 | 内容 | 位置 |
 |---|---|
-| 环境列表（名称、地址、凭据引用名） | profile 的 `cordis.patch.yml` 中 `config.docchain_environments` |
+| 环境列表（名称、地址、凭据引用名、预选主题） | profile 的 `cordis.patch.yml` 中 `config.docchain_environments` |
 | 各环境的 Key | `~/.dsh/.credentials.yaml` 的 `refs:` 段，键名形如 `DOCCHAIN_API_KEY__<ID>` |
-| 当前生效值 | `~/.dsh/storages/docchain-config.json`，每次切换重写 |
+| 当前生效值——地址、Key，以及生效环境选中的主题 `docchain_topic_ids` / `docchain_topic_names` | `~/.dsh/storages/docchain-config.json`，每次切换重写 |
 
 两个需要知道的限制：
 
