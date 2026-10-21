@@ -110,7 +110,7 @@ Two limits worth knowing:
 
 Each environment can also pre-select up to **10 topics**, so a later request can say "search this topic" without naming an ID.
 
-- The topic list comes from the active environment: keyword search on the topic name (a substring match, case-insensitive, so the full name narrows it to one row) plus paging. Each row shows the `topic_id` and the name.
+- The topic list comes from the active environment: one keyword box that the service matches against **both the topic id and the name** (substring, case-insensitive — a full id or a full name narrows it to one row), plus paging. Each row shows the `topic_id` and the name.
 - The browser never holds the API key, so the page asks the host's same-origin route `GET /plugin/dsh-docchain/topics` and the host queries the service on its behalf.
 - Selections are stored per environment (`topics` inside its entry), so switching environments switches the topic set with it.
 - While at least one topic is selected, the host injects the active environment and those `topic_id`s into the agent's prompt. The agent then uses them when the user says "the current topic" or omits `topic_ids`; with nothing selected nothing is injected.
