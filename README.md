@@ -200,7 +200,7 @@ Uploads a document (docx, doc, pdf, ppt, xlsx, images, epub, mobi and many more)
 - "Summarize the content of /path/to/report.pdf"
 - "Convert 合同.docx to a single Markdown file"
 
-The service URL and API key follow the same config chain as the search scripts, but both are optional: without configuration the built-in default (`http://10.10.185.13:7100/llmdoc`) is used with anonymous upload.
+The service URL and API key follow the same config chain as the search scripts, but both are optional: without configuration the built-in default (`https://lab.hjcloud.com/llmdoc`) is used with anonymous upload.
 
 ### docchain-image-search — find similar images
 
