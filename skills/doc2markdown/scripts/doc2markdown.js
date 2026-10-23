@@ -19,7 +19,7 @@ const { URL } = require('url');
 const POLL_INTERVAL = 3;   // Polling interval (seconds)
 const POLL_TIMEOUT = 60;   // Auto-polling timeout limit (seconds)
 
-const DEFAULT_BASE_URL = 'http://10.10.185.13:7100/llmdoc';
+const DEFAULT_BASE_URL = 'https://lab.hjcloud.com/llmdoc';
 
 const URL_ENV = 'DOCCHAIN_URL';
 const URL_FIELD = 'docchain_url';
@@ -112,7 +112,7 @@ function resolveApiKey(sources = {}) {
  *   > skill scripts/config.json
  *   > plugin state file (~/.dsh/storages/docchain-config.json)
  *   > package skills/docchain_config.json
- *   > built-in default (http://10.10.185.13:7100/llmdoc)
+ *   > built-in default (https://lab.hjcloud.com/llmdoc)
  *
  * Pure function: no filesystem access, no logging, never throws.
  *

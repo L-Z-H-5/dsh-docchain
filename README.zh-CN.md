@@ -200,7 +200,7 @@ Bundle 插入一个 Host 插件（`dsh-docchain`），激活时在 `ctx.skills` 
 - "总结 /path/to/report.pdf 的内容"
 - "把 合同.docx 转成单个 Markdown 文件"
 
-服务地址与 API Key 沿用检索脚本同一配置链，但均为可选：不配置时使用内置默认服务地址（`http://10.10.185.13:7100/llmdoc`）匿名上传。
+服务地址与 API Key 沿用检索脚本同一配置链，但均为可选：不配置时使用内置默认服务地址（`https://lab.hjcloud.com/llmdoc`）匿名上传。
 
 ### docchain-image-search（图搜图）
 

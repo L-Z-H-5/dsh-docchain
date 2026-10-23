@@ -74,7 +74,7 @@ API Key 可选——不配置时 doc2markdown 照常工作（匿名上传）。
 | 插件状态文件 | `~/.dsh/storages/docchain-config.json`（dsh-docchain 插件配置自动写入） |
 | 包内兜底 | `skills/docchain_config.json`（参考 `docchain_config.example.json`） |
 
-服务地址未配置时使用内置默认地址 `http://10.10.185.13:7100/llmdoc`。
+服务地址未配置时使用内置默认地址 `https://lab.hjcloud.com/llmdoc`。
 
 ### 配置 Key 后
 
@@ -82,10 +82,10 @@ API Key 可选——不配置时 doc2markdown 照常工作（匿名上传）。
 
 ## 数据与隐私
 
-- `convert` 会把文件上传到 docchain 服务（默认 `10.10.185.13:7100`）进行解析，结果以 ZIP 归档返回并在本地解压
-- 默认地址走 HTTP 明文；请仅在可信网络中使用，不要在公网链路传输敏感文档
+- `convert` 会把文件上传到 docchain 服务（默认 `lab.hjcloud.com`）进行解析，结果以 ZIP 归档返回并在本地解压
+- 传输全程 HTTPS 加密
 - 请确认文档不含敏感或机密信息，除非已核实服务的资料处理规范
-- 默认服务地址：http://10.10.185.13:7100/llmdoc
+- 默认服务地址：https://lab.hjcloud.com/llmdoc
 
 ## 反馈与支持
 
