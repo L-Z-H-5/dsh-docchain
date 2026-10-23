@@ -19,13 +19,14 @@ Its configuration page goes beyond a single endpoint: it keeps a list of **saved
 
 ## Installation
 
-From the GitHub repository (recommended; pure-JS package, no build step needed):
+The same package installs into either profile — pick the one that matches how you run DSH:
 
-```text
-dsh plugin --profile web add github:wct-lab/dsh-docchain
-```
+| How you run DSH | Command |
+|---|---|
+| Desktop app | `dsh plugin --profile desktop add github:wct-lab/dsh-docchain` |
+| `dsh web` | `dsh plugin --profile web add github:wct-lab/dsh-docchain` |
 
-Or from a local checkout:
+Restart DSH afterwards so the host and client halves reload. Or, from a local checkout:
 
 ```text
 plugin_manager install_bundle target=<absolute path to this directory>
@@ -33,7 +34,7 @@ plugin_manager install_bundle target=<absolute path to this directory>
 
 ## Configuration (required)
 
-No credentials ship in this package. Every script except `doc2markdown` (Node.js) needs a docchain service endpoint and an API key before it can run; `doc2markdown` (Node.js) works with neither — it defaults to the public parsing service and uploads anonymously, while the same config chain can point it at a custom endpoint/key.
+No credentials ship in this package. Every script except `doc2markdown` (Node.js) needs a docchain service endpoint and an API key before it can run; `doc2markdown` (Node.js) works with neither — it falls back to the built-in default endpoint and uploads anonymously, while the same config chain can point it at a custom endpoint/key.
 
 | Field | Meaning | Required |
 |---|---|---|

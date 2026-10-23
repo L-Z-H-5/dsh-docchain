@@ -19,13 +19,14 @@
 
 ## 安装
 
-从 GitHub 仓库安装（推荐；纯 JS 包，无需构建步骤）：
+同一个包装进哪个 profile，取决于你如何运行 DSH：
 
-```text
-dsh plugin --profile web add github:wct-lab/dsh-docchain
-```
+| 运行方式 | 命令 |
+|---|---|
+| 桌面版 | `dsh plugin --profile desktop add github:wct-lab/dsh-docchain` |
+| `dsh web` | `dsh plugin --profile web add github:wct-lab/dsh-docchain` |
 
-或从本地目录安装：
+装完重启 DSH，让宿主半区与客户端半区重新加载。或从本地目录安装：
 
 ```text
 plugin_manager install_bundle target=<本目录绝对路径>
@@ -33,7 +34,7 @@ plugin_manager install_bundle target=<本目录绝对路径>
 
 ## 配置说明（必读）
 
-包内不携带任何凭据。除 `doc2markdown` 外的每个脚本（Node.js）运行前都需要 docchain 服务地址与 API Key；`doc2markdown`（Node.js）两者都不需要——默认使用公有解析服务并匿名上传，同样可用上述配置链指向自建地址/Key。
+包内不携带任何凭据。除 `doc2markdown` 外的每个脚本（Node.js）运行前都需要 docchain 服务地址与 API Key；`doc2markdown`（Node.js）两者都不需要——使用内置默认地址并匿名上传，同样可用上述配置链指向其他地址/Key。
 
 | 配置项 | 说明 | 必填 |
 |---|---|---|
